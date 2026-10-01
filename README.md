@@ -4,7 +4,7 @@ Vollautomatischer Krypto-Trading-Bot für **Kraken**. Er handelt aktuell mit **S
 Er läuft kostenlos auf **GitHub Actions** (alle 30 Minuten). Die Handy-App läuft über **GitHub Pages**.
 
 ## Was der Bot macht (Version 2)
-8 Bots handeln mit Spielgeld aus einem gemeinsamen **Sammelkonto** (8.000 €). Alle laufen über **Kraken**:
+9 Bots handeln mit Spielgeld aus einem gemeinsamen **Sammelkonto** (8.000 €). Alle außer pump.fun laufen über **Kraken**:
 
 | Bot | Markt | Takt | Idee |
 |---|---|---|---|
@@ -14,8 +14,9 @@ Er läuft kostenlos auf **GitHub Actions** (alle 30 Minuten). Die Handy-App läu
 | Trendfolge | Krypto | 1 Stunde | EMA-Kreuzung im Aufwärtstrend |
 | Swing | Krypto | 1 Tag | 20-Tage-Ausbruch, Stop wird nachgezogen |
 | Memecoins | DOGE, SHIB, PEPE, BONK, WIF, FLOKI | 15 Minuten | Momentum-Ausbruch mit Volumen-Explosion, nur 1 % Risiko |
+| pump.fun | Solana-Memecoins von pump.fun | 5 Minuten | Scannt bei jedem Lauf die aktiv gehandelten pump.fun-Coins (Trends, Top-Volumen, beworbene Coins), strenge Sicherheitsfilter, nur 1 % Risiko. Daten: GeckoTerminal + DexScreener |
 | Forex | EUR/USD, GBP/USD, USD/JPY … | 4 Stunden | Trendfolge |
-| Aktien | Apple, Nvidia, Tesla, Microsoft, S&P 500, Nasdaq (Kraken xStocks) | 1 Stunde | Trendfolge |
+| Aktien | KI & Tech: Nvidia, Palantir, Microsoft, Google, Meta, Amazon, Apple, AMD, Broadcom, TSMC, Oracle, Arm, CrowdStrike, Intel, Tesla + S&P 500, Nasdaq (Kraken xStocks) | 1 Stunde | Trendfolge |
 
 Für alle gilt: nur Kauf (Long), **kein Hebel**, immer mit Stop-Loss, Gebühren und Slippage eingerechnet, Not-Aus bei −25 %.
 Paare, die Kraken nicht anbietet, werden automatisch übersprungen und in der App angezeigt.

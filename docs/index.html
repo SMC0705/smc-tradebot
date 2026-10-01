@@ -112,7 +112,7 @@ function tradeRows(list) {
 
 function posRows(list) {
   return list.length ? list.map(x => `
-    <div class="row"><div class="l"><b>${esc(x.pair)}</b><span>${x.bot ? esc(x.bot) + " · " : ""}seit ${when(x.opened_t)}</span></div>
+    <div class="row"><div class="l"><b>${x.addr ? `<a href="https://dexscreener.com/solana/${esc(x.addr)}" target="_blank" rel="noopener" style="color:inherit">${esc(x.pair)} ↗</a>` : esc(x.pair)}</b><span>${x.bot ? esc(x.bot) + " · " : ""}seit ${when(x.opened_t)}</span></div>
     <div class="r"><b class="${cls(x.pnl_pct)}">${pc(x.pnl_pct)}</b><span>${eur(x.value)}</span></div></div>`).join("")
     : '<div class="empty">Keine offenen Trades</div>';
 }
@@ -137,6 +137,7 @@ function viewDetail(id) {
   const b = data.bots[id], L = b.learning, s = b.stats;
   return `<button class="back" data-back>‹ Alle Bots</button>
   ${b.unavailable.length ? `<div class="info">Bei Kraken nicht verfügbar: ${b.unavailable.map(esc).join(", ")}</div>` : ""}
+  ${b.scan ? `<div class="info">Letzter Scan ${when(b.scan.t)}: ${b.scan.found} pump.fun-Coins gefunden, ${b.scan.passed} haben die Sicherheitsfilter bestanden.</div>` : ""}
   <div class="card"><div class="lbl">${esc(b.name)} · ${esc(b.market)} · ${esc(b.style)} · ${b.weight} % vom Konto</div>
     <div class="big">${eur(b.equity)}</div><div class="pct ${cls(b.pnl_pct)}">${pc(b.pnl_pct)} (${eur(b.pnl)})</div>${chart(b.curve)}
     <div class="stats"><div><b>${s.trades}</b><span>Trades</span></div><div><b>${s.winrate == null ? "–" : s.winrate + " %"}</b><span>Treffer</span></div>

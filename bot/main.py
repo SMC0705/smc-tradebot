@@ -9,6 +9,7 @@ from . import engine as E
 from . import learning as L
 from . import pool as P
 from .kraken import get_candles
+from . import pumpfun
 
 WARMUP = 500  # Schatten-Varianten lernen beim ersten Start aus bis zu 500 vergangenen Kerzen
 
@@ -61,6 +62,9 @@ def fx_rates(errors):
 
 def run_bot(bid, bot, st, rates, enabled, errors, unavailable):
     labels = [variant_label(i) for i in range(len(bot["variants"]))]
+    if bot.get("source") == "pumpfun":
+        pumpfun.run(bot, st, rates, enabled, errors, lambda: 1.0)
+        return L.choose_variant(st, labels)
     for pair in bot["pairs"]:
         quote = pair[-3:]
         if quote not in rates:
@@ -109,11 +113,13 @@ def downsample(curve, n=200):
 def bot_status(bid, bot, st, weight, scores, unavailable):
     a = st["real"]
     eq = E.equity(a)
-    trades = [dict(t, pair=C.display(t["pair"])) for t in reversed(a["trades"][-30:])]
+    names = st.get("names", {})
+    disp = (lambda x: names.get(x, x[:6] + "…")) if bot.get("source") == "pumpfun" else C.display
+    trades = [dict(t, pair=disp(t["pair"])) for t in reversed(a["trades"][-30:])]
     pos = []
     for p in a["positions"].values():
         val = p["qty"] * a["marks"].get(p["pair"], p["entry"] * p["rate"])
-        pos.append({"pair": C.display(p["pair"]), "entry": p["entry"], "stop": p["stop"], "target": p["target"],
+        pos.append({"pair": disp(p["pair"]), "addr": p["pair"] if bot.get("source") == "pumpfun" else None, "entry": p["entry"], "stop": p["stop"], "target": p["target"],
                     "opened_t": p["opened_t"], "value": round(val, 2),
                     "pnl_pct": round((val * (1 - bot["fee"]) / p["cost"] - 1) * 100, 2), "reason": p["reason"]})
     return {
@@ -125,6 +131,7 @@ def bot_status(bid, bot, st, weight, scores, unavailable):
         "stats": stats(a["trades"], a["equity_curve"], max(a["net_in"], a.get("cap", 0.0))),
         "curve": downsample(a["equity_curve"]),
         "unavailable": [C.display(p) for p in unavailable],
+        "scan": st.get("last_scan"),
         "learning": {
             "active": variant_label(st["active"]),
             "variants": [{"label": variant_label(i), "params": bot["variants"][i], "trades": s[1],

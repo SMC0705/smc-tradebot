@@ -12,7 +12,9 @@ MIN_ORDER_EUR = 10.0
 CRYPTO = ["XBTEUR", "ETHEUR", "LTCEUR", "SOLEUR", "XRPEUR"]
 MEMES = ["DOGEEUR", "SHIBEUR", "PEPEEUR", "BONKEUR", "WIFEUR", "FLOKIEUR"]
 FOREX = ["EURUSD", "GBPUSD", "AUDUSD", "USDJPY", "USDCHF", "USDCAD"]
-STOCKS = ["AAPLxUSD", "NVDAxUSD", "TSLAxUSD", "MSFTxUSD", "SPYxUSD", "QQQxUSD"]  # Kraken xStocks
+# Kraken xStocks: KI-/Tech-Werte, Palantir und Indizes
+STOCKS = ["NVDAxUSD", "PLTRxUSD", "MSFTxUSD", "GOOGLxUSD", "METAxUSD", "AMZNxUSD", "AAPLxUSD", "AMDxUSD",
+          "AVGOxUSD", "TSMxUSD", "ORCLxUSD", "ARMxUSD", "CRWDxUSD", "INTCxUSD", "TSLAxUSD", "SPYxUSD", "QQQxUSD"]
 
 # --- Bots --------------------------------------------------------------------
 # tf = Kerzenlänge in Minuten. variants = Parameter-Sets, zwischen denen der Bot
@@ -45,13 +47,18 @@ BOTS = {
                      {"n": 24, "vol": 2.0, "rr": 3.0},
                      {"n": 48, "vol": 2.5, "rr": 3.0},
                      {"n": 24, "vol": 3.0, "rr": 4.0}]),
+    "pump": dict(_BASE, name="pump.fun", style="5 Minuten", tf=5, market="Solana", pairs=[], source="pumpfun",
+                 strategy="meme", risk=0.01, max_pos=4, frac=0.10, fee=0.01, slip=0.01, variants=[
+                     {"stop": 0.15, "target": 0.40, "trail": 12},
+                     {"stop": 0.25, "target": 0.80, "trail": 24},
+                     {"stop": 0.10, "target": 0.25, "trail": 6}]),
     "fx": dict(_BASE, name="Forex", style="4 Stunden", tf=240, market="Währungen", pairs=FOREX,
                strategy="trend", fee=0.002, slip=0.0002, variants=[
                    {"fast": 20, "slow": 50, "rr": 2.0},
                    {"fast": 10, "slow": 30, "rr": 2.0},
                    {"fast": 20, "slow": 50, "rr": 3.0}]),
     "stocks": dict(_BASE, name="Aktien", style="Stunden", tf=60, market="Aktien", pairs=STOCKS,
-                   strategy="trend", aclass="tokenized_asset", variants=[
+                   strategy="trend", aclass="tokenized_asset", max_pos=5, frac=0.2, variants=[
                        {"fast": 20, "slow": 50, "rr": 2.0},
                        {"fast": 10, "slow": 30, "rr": 2.0},
                        {"fast": 20, "slow": 50, "rr": 3.0}]),
