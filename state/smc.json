@@ -1,0 +1,20 @@
+{
+ "start": 1000.0,
+ "cash": 1000.0,
+ "peak_equity": 1000.0,
+ "halted": false,
+ "positions": {},
+ "trades": [],
+ "equity_curve": [
+  [
+   1790874154,
+   1000.0
+  ]
+ ],
+ "last_signal_t": {
+  "BTC/EUR": 1790870400,
+  "ETH/EUR": 1790870400,
+  "LTC/EUR": 1790870400,
+  "SOL/EUR": 1790870400
+ }
+}
