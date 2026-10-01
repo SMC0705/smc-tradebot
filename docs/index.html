@@ -11,146 +11,237 @@
 <link rel="icon" href="icon.svg">
 <link rel="apple-touch-icon" href="icon-192.png">
 <style>
-:root{--bg:#0f1115;--card:#181b22;--line:#262a33;--txt:#e8eaf0;--mut:#8a90a0;--up:#22c55e;--down:#ef4444;--acc:#6366f1}
+:root{--bg:#0f1115;--card:#181b22;--line:#262a33;--txt:#e8eaf0;--mut:#8a90a0;--up:#22c55e;--down:#ef4444;--acc:#6366f1;--warn:#f59e0b}
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:var(--bg);color:var(--txt);font:15px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-  padding:calc(env(safe-area-inset-top) + 16px) 16px calc(env(safe-area-inset-bottom) + 24px);max-width:560px;margin:0 auto}
-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+  padding:calc(env(safe-area-inset-top) + 16px) 16px calc(env(safe-area-inset-bottom) + 90px);max-width:560px;margin:0 auto}
+header{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:10px}
 h1{font-size:17px;font-weight:600}
-.badge{font-size:11px;font-weight:700;letter-spacing:.5px;padding:3px 8px;border-radius:99px;background:#f59e0b22;color:#f59e0b}
-.badge.live{background:#22c55e22;color:var(--up)}
-.seg{display:flex;background:var(--card);border-radius:10px;padding:3px;margin-bottom:14px}
-.seg button{flex:1;border:0;background:none;color:var(--mut);padding:8px;border-radius:8px;font:inherit;font-weight:600}
-.seg button.on{background:var(--line);color:var(--txt)}
+.badge{font-size:11px;font-weight:700;letter-spacing:.5px;padding:3px 8px;border-radius:99px;background:#f59e0b22;color:var(--warn)}
 .card{background:var(--card);border-radius:14px;padding:16px;margin-bottom:12px}
 .lbl{color:var(--mut);font-size:13px}
-.big{font-size:36px;font-weight:700;letter-spacing:-.5px;margin:2px 0}
-.pct{font-size:17px;font-weight:600}
-.up{color:var(--up)}.down{color:var(--down)}
-svg.chart{width:100%;height:90px;display:block;margin-top:10px}
-.row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
-.row:first-of-type{border-top:0}
-.row .l b{display:block}.row .l span,.row .r span{color:var(--mut);font-size:12px}
-.row .r{text-align:right;white-space:nowrap;padding-left:10px}.row .r b,.row .r span{display:block}
-h2{font-size:14px;color:var(--mut);font-weight:600;margin:18px 4px 8px;text-transform:uppercase;letter-spacing:.5px}
-.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}
-.stats div{background:var(--bg);border-radius:10px;padding:8px;text-align:center}
-.stats b{display:block;font-size:16px}.stats span{font-size:11px;color:var(--mut)}
-.empty{color:var(--mut);text-align:center;padding:12px}
-.foot{color:var(--mut);font-size:12px;text-align:center;margin-top:14px}
+.big{font-size:34px;font-weight:700;letter-spacing:-.5px;margin:2px 0}
+.pct{font-size:16px;font-weight:600}
+.up{color:var(--up)}.down{color:var(--down)}.mut{color:var(--mut)}
+svg.chart{width:100%;height:80px;display:block;margin-top:10px}
+h2{font-size:13px;color:var(--mut);font-weight:600;margin:18px 4px 8px;text-transform:uppercase;letter-spacing:.5px}
+.row{display:flex;justify-content:space-between;align-items:center;padding:11px 0;border-top:1px solid var(--line);gap:10px}
+.card>.row:first-child{border-top:0;padding-top:0}
+.row .l{min-width:0}.row .l b{display:block}.row .l span{color:var(--mut);font-size:12px}
+.row .r{text-align:right;white-space:nowrap}.row .r b,.row .r span{display:block}.row .r span{font-size:12px;color:var(--mut)}
+.bot{cursor:pointer}.bot.off{opacity:.45}
+.chip{display:inline-block;font-size:11px;padding:1px 7px;border-radius:99px;background:var(--line);color:var(--mut);margin-right:4px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:12px}
+.stats div{background:var(--bg);border-radius:10px;padding:8px 4px;text-align:center}
+.stats b{display:block;font-size:15px}.stats span{font-size:10.5px;color:var(--mut)}
+.empty{color:var(--mut);text-align:center;padding:10px}
 .warn{background:#ef444422;color:#fca5a5;border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:13px}
-#reload{background:none;border:0;color:var(--acc);font:inherit;font-weight:600}
+.info{background:#6366f122;color:#c7d2fe;border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:13px}
+.back{background:none;border:0;color:var(--acc);font:inherit;font-weight:600;margin-bottom:10px;padding:4px 0}
+.log{font-size:13px;padding:8px 0;border-top:1px solid var(--line)}.log span{color:var(--mut);font-size:11px;display:block}
+table{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px}td,th{padding:6px 4px;text-align:left;border-top:1px solid var(--line)}th{color:var(--mut);font-weight:500}
+.act{color:var(--up);font-weight:700}
+nav{position:fixed;left:0;right:0;bottom:0;background:#14171dee;backdrop-filter:blur(8px);border-top:1px solid var(--line);
+  display:flex;justify-content:center;padding:8px 16px calc(env(safe-area-inset-bottom) + 8px)}
+nav div{display:flex;max-width:528px;width:100%;gap:8px}
+nav button{flex:1;border:0;background:none;color:var(--mut);font:inherit;font-weight:600;padding:10px;border-radius:10px}
+nav button.on{background:var(--line);color:var(--txt)}
+.slider{padding:10px 0;border-top:1px solid var(--line)}.slider:first-of-type{border-top:0}
+.slider .top{display:flex;justify-content:space-between;margin-bottom:6px}.slider .top span{color:var(--mut);font-size:13px}
+input[type=range]{width:100%;accent-color:var(--acc)}
+.btn{width:100%;border:0;border-radius:10px;padding:12px;font:inherit;font-weight:700;background:var(--acc);color:#fff;margin-top:10px}
+.btn.sec{background:var(--line);color:var(--txt)}
+.btn:disabled{opacity:.5}
+input[type=password],input[type=text]{width:100%;background:var(--bg);border:1px solid var(--line);color:var(--txt);border-radius:10px;padding:10px;font:inherit;margin-top:8px}
+details summary{cursor:pointer;font-weight:600}
+ol{margin:8px 0 0 18px;font-size:13px;color:var(--mut)}ol li{margin:3px 0}
+.foot{color:var(--mut);font-size:12px;text-align:center;margin-top:14px}
+#toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#22262f;color:var(--txt);padding:10px 16px;border-radius:10px;font-size:14px;display:none;max-width:90%}
 </style>
 </head>
 <body>
-<header><h1>SMC Tradebot</h1><span id="mode" class="badge">DEMO</span></header>
+<header><h1 id="title">SMC Tradebot</h1><span id="mode" class="badge">DEMO</span></header>
 <div id="warn"></div>
-<div class="seg" id="seg"></div>
-<div class="card">
-  <div class="lbl">Aktuelles Guthaben</div>
-  <div class="big" id="eq">–</div>
-  <div class="pct" id="pct">–</div>
-  <svg class="chart" id="chart" viewBox="0 0 300 90" preserveAspectRatio="none"></svg>
-  <div class="stats" id="stats"></div>
-</div>
-<h2>Offene Trades</h2><div class="card" id="open"></div>
-<h2>Letzte Trades</h2><div class="card" id="trades"></div>
-<div class="foot"><span id="upd"></span> · <button id="reload">Aktualisieren</button></div>
+<main id="view"></main>
+<div class="foot" id="upd"></div>
+<nav><div><button data-tab="bots" class="on">Bots</button><button data-tab="konto">Konto</button></div></nav>
+<div id="toast"></div>
 
 <script>
 const eur = v => (v ?? 0).toLocaleString("de-DE", {style: "currency", currency: "EUR"});
 const pc = v => (v > 0 ? "+" : "") + (v ?? 0).toLocaleString("de-DE", {maximumFractionDigits: 2}) + " %";
 const cls = v => v > 0 ? "up" : v < 0 ? "down" : "";
 const when = t => new Date(t * 1000).toLocaleString("de-DE", {day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit"});
-const px = v => v == null ? "–" : v.toLocaleString("de-DE", {maximumSignificantDigits: 6});
-const esc = s => String(s).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
-let data = null, view = "total";
-try { view = localStorage.getItem("view") || "total"; } catch (e) {}
+const px = v => v == null ? "–" : Number(v).toLocaleString("de-DE", {maximumSignificantDigits: 6});
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+const $ = id => document.getElementById(id);
+const store = {get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+               set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }};
+let data = null, tab = "bots", detail = null, draft = null;
 
-function sources() {
+function repo() {
   const h = location.hostname, parts = location.pathname.split("/").filter(Boolean);
-  const list = [];
-  if (h.endsWith(".github.io") && parts.length)
-    list.push(`https://raw.githubusercontent.com/${h.split(".")[0]}/${parts[0]}/main/docs/data/status.json?t=${Date.now()}`);
-  list.push(`data/status.json?t=${Date.now()}`);
-  return list;
+  if (h.endsWith(".github.io") && parts.length) return {owner: h.split(".")[0], name: parts[0]};
+  return null;
 }
 
 async function load() {
-  for (const u of sources()) {
-    try { const r = await fetch(u, {cache: "no-store"}); if (r.ok) { data = await r.json(); break; } } catch (e) {}
+  const r = repo(), urls = [];
+  if (r) urls.push(`https://raw.githubusercontent.com/${r.owner}/${r.name}/main/docs/data/status.json?t=${Date.now()}`);
+  urls.push(`data/status.json?t=${Date.now()}`);
+  for (const u of urls) {
+    try { const res = await fetch(u, {cache: "no-store"}); if (res.ok) { const d = await res.json(); if (d.bots) { data = d; break; } } } catch (e) {}
   }
   render();
 }
 
 function chart(curve) {
-  const el = document.getElementById("chart");
-  if (!curve || curve.length < 2) { el.innerHTML = ""; return; }
+  if (!curve || curve.length < 2) return '<svg class="chart"></svg>';
   const ys = curve.map(p => p[1]), mn = Math.min(...ys), mx = Math.max(...ys), r = mx - mn || 1;
-  const pts = ys.map((y, i) => `${(i / (ys.length - 1) * 300).toFixed(1)},${(85 - (y - mn) / r * 80).toFixed(1)}`).join(" ");
+  const pts = ys.map((y, i) => `${(i / (ys.length - 1) * 300).toFixed(1)},${(75 - (y - mn) / r * 70).toFixed(1)}`).join(" ");
   const col = ys[ys.length - 1] >= ys[0] ? "var(--up)" : "var(--down)";
-  el.innerHTML = `<polyline points="${pts}" fill="none" stroke="${col}" stroke-width="2" vector-effect="non-scaling-stroke"/>`;
+  return `<svg class="chart" viewBox="0 0 300 80" preserveAspectRatio="none"><polyline points="${pts}" fill="none" stroke="${col}" stroke-width="2" vector-effect="non-scaling-stroke"/></svg>`;
 }
 
-function totalCurve() {
-  const cs = Object.values(data.strategies).map(s => s.curve);
-  const n = Math.min(...cs.map(c => c.length));
-  return Array.from({length: n}, (_, i) => [cs[0][cs[0].length - n + i][0], cs.reduce((a, c) => a + c[c.length - n + i][1], 0)]);
+function tradeRows(list) {
+  return list.length ? list.map(t => `
+    <div class="row"><div class="l"><b>${esc(t.pair)} · ${esc(t.result)}</b><span>${t.bot ? esc(t.bot) + " · " : ""}${when(t.closed_t)} · ${px(t.entry)} → ${px(t.exit)}</span></div>
+    <div class="r"><b class="${cls(t.pnl)}">${eur(t.pnl)}</b><span>${pc(t.pnl_pct)}</span></div></div>`).join("")
+    : '<div class="empty">Noch keine abgeschlossenen Trades</div>';
+}
+
+function posRows(list) {
+  return list.length ? list.map(x => `
+    <div class="row"><div class="l"><b>${esc(x.pair)}</b><span>${x.bot ? esc(x.bot) + " · " : ""}seit ${when(x.opened_t)}</span></div>
+    <div class="r"><b class="${cls(x.pnl_pct)}">${pc(x.pnl_pct)}</b><span>${eur(x.value)}</span></div></div>`).join("")
+    : '<div class="empty">Keine offenen Trades</div>';
+}
+
+function viewBots() {
+  const P = data.pool, B = data.bots;
+  const ids = Object.keys(B).sort((a, b) => (B[b].enabled - B[a].enabled) || (B[b].pnl_pct - B[a].pnl_pct));
+  const allTrades = ids.flatMap(id => B[id].trades.map(t => ({...t, bot: B[id].name}))).sort((a, b) => b.closed_t - a.closed_t).slice(0, 10);
+  const allPos = ids.flatMap(id => B[id].positions.map(p => ({...p, bot: B[id].name})));
+  return `
+  <div class="card"><div class="lbl">Sammelkonto gesamt</div><div class="big">${eur(P.equity)}</div>
+    <div class="pct ${cls(P.pnl_pct)}">${pc(P.pnl_pct)} seit Start</div>${chart(P.curve)}</div>
+  <h2>Bots</h2><div class="card">${ids.map(id => { const b = B[id]; return `
+    <div class="row bot ${b.enabled ? "" : "off"}" data-bot="${id}"><div class="l"><b>${esc(b.name)}${b.halted ? " ⛔" : ""}</b>
+      <span><span class="chip">${esc(b.market)}</span><span class="chip">${esc(b.style)}</span>${b.positions.length ? b.positions.length + " offen" : ""}</span></div>
+    <div class="r"><b>${eur(b.equity)}</b><span class="${cls(b.pnl_pct)}">${b.enabled ? pc(b.pnl_pct) : "aus"}</span></div></div>`; }).join("")}</div>
+  <h2>Offene Trades</h2><div class="card">${posRows(allPos)}</div>
+  <h2>Letzte Trades</h2><div class="card">${tradeRows(allTrades)}</div>`;
+}
+
+function viewDetail(id) {
+  const b = data.bots[id], L = b.learning, s = b.stats;
+  return `<button class="back" data-back>‹ Alle Bots</button>
+  ${b.unavailable.length ? `<div class="info">Bei Kraken nicht verfügbar: ${b.unavailable.map(esc).join(", ")}</div>` : ""}
+  <div class="card"><div class="lbl">${esc(b.name)} · ${esc(b.market)} · ${esc(b.style)} · ${b.weight} % vom Konto</div>
+    <div class="big">${eur(b.equity)}</div><div class="pct ${cls(b.pnl_pct)}">${pc(b.pnl_pct)} (${eur(b.pnl)})</div>${chart(b.curve)}
+    <div class="stats"><div><b>${s.trades}</b><span>Trades</span></div><div><b>${s.winrate == null ? "–" : s.winrate + " %"}</b><span>Treffer</span></div>
+    <div><b>${s.avg_r == null ? "–" : (s.avg_r > 0 ? "+" : "") + s.avg_r}</b><span>Ø R</span></div><div><b>-${s.max_drawdown_pct} %</b><span>Max. Rückg.</span></div></div></div>
+  <h2>Lernen</h2><div class="card">
+    <div class="lbl">Aktive Variante: <b class="act">${esc(L.active)}</b>${L.paused.length ? " · pausiert: " + L.paused.map(esc).join(", ") : ""}</div>
+    <table><tr><th>Var.</th><th>Einstellung</th><th>Trades</th><th>Ø R</th></tr>
+    ${L.variants.map(v => `<tr><td class="${v.label === L.active ? "act" : ""}">${v.label}</td><td class="mut">${esc(Object.entries(v.params).map(([k, x]) => k + " " + x).join(", "))}</td><td>${v.trades}</td><td class="${cls(v.avg_r)}">${v.avg_r}</td></tr>`).join("")}</table>
+    ${L.log.length ? L.log.map(([t, m]) => `<div class="log">${esc(m)}<span>${when(t)}</span></div>`).join("") : '<div class="log mut">Noch keine Anpassungen</div>'}
+  </div>
+  <h2>Offene Trades</h2><div class="card">${posRows(b.positions)}</div>
+  <h2>Letzte Trades</h2><div class="card">${tradeRows(b.trades)}</div>`;
+}
+
+function viewKonto() {
+  const P = data.pool, B = data.bots;
+  if (!draft) draft = Object.fromEntries(Object.keys(B).map(id => [id, Math.round(B[id].weight)]));
+  const sum = Object.values(draft).reduce((a, b) => a + b, 0);
+  const total = P.equity;
+  const hasToken = !!store.get("gh_token");
+  return `
+  <div class="card"><div class="lbl">Sammelkonto</div><div class="big">${eur(P.equity)}</div>
+    <div class="pct ${cls(P.pnl_pct)}">${pc(P.pnl_pct)} seit Start (${eur(P.start)})</div>
+    <div class="row" style="margin-top:10px"><div class="l">Nicht zugeteilt</div><div class="r"><b>${eur(P.unallocated)}</b></div></div>
+    ${P.rebalancing ? '<div class="lbl" style="margin-top:6px">Umverteilung läuft – Geld in offenen Trades wird nachgeholt.</div>' : ""}</div>
+  <h2>Aufteilung auf die Bots</h2><div class="card">
+    ${Object.keys(draft).map(id => `<div class="slider"><div class="top"><b>${esc(B[id].name)}</b>
+      <span data-wl="${id}">${draft[id]} % · ${eur(sum ? total * draft[id] / sum : 0)}</span></div>
+      <input type="range" min="0" max="100" step="5" value="${draft[id]}" data-w="${id}"></div>`).join("")}
+    <div class="row"><div class="l">Summe</div><div class="r"><b id="wsum" class="${sum === 100 ? "up" : "down"}">${sum} %</b></div></div>
+    <div class="lbl">0 % = Bot aus. Offene Trades laufen zu Ende, danach geht das Geld zurück in den Topf. ${sum !== 100 ? "Beim Speichern wird automatisch auf 100 % umgerechnet." : ""}</div>
+    <button class="btn sec" data-equal>Gleich verteilen</button>
+    <button class="btn" data-save ${hasToken ? "" : "disabled"}>Aufteilung speichern</button>
+    ${hasToken ? "" : '<div class="lbl" style="margin-top:8px">Zum Speichern unten einmalig die Verbindung einrichten.</div>'}
+  </div>
+  <h2>Einzahlung</h2><div class="card"><div class="lbl">Litecoin (LTC) einzahlen</div>
+    <div style="margin-top:6px">Kommt mit dem Echtgeld-Modus. Dann steht hier deine Kraken-Einzahlungsadresse. Eingezahlte LTC werden in EUR umgewandelt und landen als „nicht zugeteilt“ im Topf – danach automatisch nach deiner Aufteilung verteilt.</div></div>
+  <h2>Verbindung</h2><div class="card"><details ${hasToken ? "" : "open"}><summary>${hasToken ? "✓ Verbunden – ändern" : "GitHub-Schlüssel einrichten"}</summary>
+    <ol><li>github.com → Profilbild → <b>Settings</b> → ganz unten <b>Developer settings</b></li>
+    <li><b>Personal access tokens → Fine-grained tokens → Generate new token</b></li>
+    <li>Name z. B. „Tradebot-App“, Ablauf 1 Jahr, <b>Only select repositories → smc-tradebot</b></li>
+    <li>Permissions: <b>Contents: Read and write</b> und <b>Actions: Read and write</b></li>
+    <li>Token kopieren und hier einfügen. Er bleibt nur auf diesem Handy gespeichert.</li></ol>
+    <input type="password" id="tok" placeholder="github_pat_…" value="">
+    <button class="btn sec" data-tok>Schlüssel speichern</button></details></div>`;
 }
 
 function render() {
-  if (!data) { document.getElementById("warn").innerHTML = '<div class="warn">Noch keine Daten. Läuft der Bot schon?</div>'; return; }
-  const S = data.strategies, keys = Object.keys(S);
-  if (view !== "total" && !S[view]) view = "total";
-  document.getElementById("seg").innerHTML = [["total", "Gesamt"], ...keys.map(k => [k, S[k].name])]
-    .map(([k, n]) => `<button data-k="${k}" class="${k === view ? "on" : ""}">${esc(n)}</button>`).join("");
-  const mode = document.getElementById("mode");
-  mode.textContent = data.mode === "live" ? "ECHTGELD" : "DEMO";
-  mode.className = "badge" + (data.mode === "live" ? " live" : "");
-
-  const sel = view === "total" ? keys.map(k => S[k]) : [S[view]];
-  const eq = view === "total" ? data.total.equity : S[view].equity;
-  const p = view === "total" ? data.total.pnl_pct : S[view].pnl_pct;
-  document.getElementById("eq").textContent = eur(eq);
-  const pe = document.getElementById("pct");
-  pe.textContent = `${pc(p)} seit Start`; pe.className = "pct " + cls(p);
-  chart(view === "total" ? totalCurve() : S[view].curve);
-
-  const trades = sel.flatMap(s => s.trades.map(t => ({...t, s: s.name}))).sort((a, b) => b.closed_t - a.closed_t).slice(0, 20);
-  const n = sel.reduce((a, s) => a + s.stats.trades, 0);
-  const wins = sel.reduce((a, s) => a + (s.stats.winrate ?? 0) * s.stats.trades / 100, 0);
-  const dd = Math.max(...sel.map(s => s.stats.max_drawdown_pct));
-  document.getElementById("stats").innerHTML =
-    `<div><b>${n}</b><span>Trades</span></div><div><b>${n ? Math.round(wins / n * 100) + " %" : "–"}</b><span>Trefferquote</span></div><div><b>-${dd.toLocaleString("de-DE")} %</b><span>Max. Rückgang</span></div>`;
-
-  const open = sel.flatMap(s => s.positions.map(x => ({...x, s: s.name})));
-  document.getElementById("open").innerHTML = open.length ? open.map(x => `
-    <div class="row"><div class="l"><b>${esc(x.pair)}</b><span>${esc(x.s)} · seit ${when(x.opened_t)}</span></div>
-    <div class="r"><b class="${cls(x.pnl_pct)}">${pc(x.pnl_pct)}</b><span>${eur(x.value)}</span></div></div>`).join("")
-    : '<div class="empty">Keine offenen Trades</div>';
-
-  document.getElementById("trades").innerHTML = trades.length ? trades.map(t => `
-    <div class="row"><div class="l"><b>${esc(t.pair)} · ${esc(t.result)}</b><span>${esc(t.s)} · ${when(t.closed_t)} · ${px(t.entry)} → ${px(t.exit)}</span></div>
-    <div class="r"><b class="${cls(t.pnl)}">${eur(t.pnl)}</b><span>${pc(t.pnl_pct)}</span></div></div>`).join("")
-    : '<div class="empty">Noch keine abgeschlossenen Trades</div>';
-
-  const age = (Date.now() / 1000 - data.updated_at) / 60;
-  document.getElementById("upd").textContent = `Stand: ${when(data.updated_at)}`;
-  const w = [];
+  if (!data) { $("view").innerHTML = '<div class="warn">Noch keine Daten. Läuft der Bot schon?</div>'; return; }
+  document.querySelectorAll("nav button").forEach(b => b.classList.toggle("on", b.dataset.tab === tab));
+  $("view").innerHTML = tab === "konto" ? viewKonto() : detail && data.bots[detail] ? viewDetail(detail) : viewBots();
+  const age = (Date.now() / 1000 - data.updated_at) / 60, w = [];
   if (age > 120) w.push(`Letzte Aktualisierung vor ${Math.round(age / 60)} Std. – Bot prüfen.`);
-  if (sel.some(s => s.halted)) w.push("Not-Aus aktiv: −25 % vom Höchststand erreicht, keine neuen Trades.");
-  if (data.errors && data.errors.length) w.push("Fehler beim letzten Lauf: " + data.errors.map(esc).join(", "));
-  document.getElementById("warn").innerHTML = w.map(x => `<div class="warn">${x}</div>`).join("");
+  const halted = Object.values(data.bots).filter(b => b.halted).map(b => b.name);
+  if (halted.length) w.push("Not-Aus aktiv (−25 %): " + halted.map(esc).join(", "));
+  if (data.errors && data.errors.length) w.push("Hinweise vom letzten Lauf: " + data.errors.map(esc).join(" · "));
+  $("warn").innerHTML = w.map(x => `<div class="warn">${x}</div>`).join("");
+  $("upd").innerHTML = `Stand: ${when(data.updated_at)} · <a href="#" id="reload" style="color:var(--acc)">Aktualisieren</a>`;
 }
 
-document.getElementById("seg").addEventListener("click", e => {
-  const k = e.target.dataset.k; if (!k) return;
-  view = k; try { localStorage.setItem("view", k); } catch (e) {}
+function toast(msg) { const t = $("toast"); t.textContent = msg; t.style.display = "block"; clearTimeout(t._h); t._h = setTimeout(() => t.style.display = "none", 4000); }
+
+async function saveAllocation() {
+  const r = repo(), token = store.get("gh_token");
+  if (!r) return toast("Speichern geht nur in der App auf github.io");
+  const sum = Object.values(draft).reduce((a, b) => a + b, 0) || 1;
+  const weights = Object.fromEntries(Object.entries(draft).map(([k, v]) => [k, Math.round(v / sum * 1000) / 10]));
+  const api = `https://api.github.com/repos/${r.owner}/${r.name}`;
+  const h = {Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json"};
+  try {
+    let sha;
+    const cur = await fetch(`${api}/contents/config/allocation.json`, {headers: h, cache: "no-store"});
+    if (cur.ok) sha = (await cur.json()).sha;
+    else if (cur.status === 401 || cur.status === 403) throw new Error("Schlüssel ungültig oder ohne Rechte");
+    const body = JSON.stringify({weights}, null, 1) + "\n";
+    const put = await fetch(`${api}/contents/config/allocation.json`, {method: "PUT", headers: h,
+      body: JSON.stringify({message: "Aufteilung über App geändert", content: btoa(body), sha})});
+    if (!put.ok) throw new Error(`GitHub-Fehler ${put.status}`);
+    // Bot sofort starten (klappt nur mit Actions-Recht – sonst beim nächsten 30-Minuten-Lauf)
+    const run = await fetch(`${api}/actions/workflows/bot.yml/dispatches`, {method: "POST", headers: h, body: JSON.stringify({ref: "main"})});
+    toast(run.ok ? "Gespeichert – Bot verteilt in ca. 1–2 Minuten um" : "Gespeichert – wird beim nächsten Lauf (≤ 30 Min.) umgesetzt");
+  } catch (e) { toast("Fehler: " + e.message); }
+}
+
+document.addEventListener("click", e => {
+  const t = e.target.closest("[data-tab],[data-bot],[data-back],[data-equal],[data-save],[data-tok],#reload");
+  if (!t) return;
+  if (t.id === "reload") { e.preventDefault(); load(); return; }
+  if (t.dataset.tab) { tab = t.dataset.tab; detail = null; draft = null; }
+  else if (t.dataset.bot) { detail = t.dataset.bot; window.scrollTo(0, 0); }
+  else if (t.hasAttribute("data-back")) detail = null;
+  else if (t.hasAttribute("data-equal")) { const ids = Object.keys(draft); ids.forEach(k => draft[k] = Math.floor(100 / ids.length / 5) * 5); draft[ids[0]] += 100 - Object.values(draft).reduce((a, b) => a + b, 0); }
+  else if (t.hasAttribute("data-save")) { saveAllocation(); return; }
+  else if (t.hasAttribute("data-tok")) { const v = $("tok").value.trim(); if (v) { store.set("gh_token", v); toast("Schlüssel gespeichert"); } }
   render();
 });
-document.getElementById("reload").onclick = load;
-document.addEventListener("visibilitychange", () => { if (!document.hidden) load(); });
-setInterval(load, 5 * 60 * 1000);
+document.addEventListener("input", e => {
+  if (!e.target.dataset.w) return;
+  draft[e.target.dataset.w] = +e.target.value;
+  const sum = Object.values(draft).reduce((a, b) => a + b, 0);
+  for (const id in draft) { const el = document.querySelector(`[data-wl="${id}"]`); if (el) el.textContent = `${draft[id]} % · ${eur(sum ? data.pool.equity * draft[id] / sum : 0)}`; }
+  $("wsum").textContent = sum + " %"; $("wsum").className = sum === 100 ? "up" : "down";
+});
+document.addEventListener("visibilitychange", () => { if (!document.hidden && tab !== "konto") load(); });
+setInterval(() => { if (tab !== "konto") load(); }, 5 * 60 * 1000);
 load();
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
 </script>

@@ -1,119 +1,153 @@
-"""Die beiden Strategien. Jede bekommt nur ABGESCHLOSSENE Kerzen und gibt ein
-Kaufsignal zurück (nur Long, kein Hebel) oder None.
+"""Alle Strategien. Jede bekommt ABGESCHLOSSENE Kerzen (älteste zuerst) und ein
+Parameter-Set und gibt ein Kaufsignal zurück (nur Long, kein Hebel) oder None.
 
-Signal-Format: {"stop": float, "target": float, "reason": str}
+Signal: {"stop", "target", "reason", optional "trail_n", "max_hold", "eod"}
+Eingestiegen wird immer erst zum Eröffnungskurs der NÄCHSTEN Kerze (kein Blick in die Zukunft).
 """
 from .indicators import ema, rsi, atr
 
-MIN_CANDLES = 210
+WINDOW = 260  # so viele Kerzen bekommt jede Strategie
 
 
-# ---------------------------------------------------------------------------
-# 1) SMC – Smart Money Concepts (vereinfacht, nur Long)
-#    Ablauf: Strukturbruch nach oben (BOS) mit Verdrängung (Fair Value Gap)
-#    -> Kurs kommt zum ersten Mal in den Order Block zurück und reagiert bullish
-#    -> Kauf, Stop unter dem Order Block, Ziel 2,5x Risiko.
-# ---------------------------------------------------------------------------
-SWING_N = 3          # Fraktal-Breite für Hoch-/Tiefpunkte
-BOS_LOOKBACK = 40    # Strukturbruch darf max. so viele Kerzen her sein
-SMC_RR = 2.5
+def _avg(xs):
+    return sum(xs) / len(xs) if xs else 0.0
 
 
-def _swing_highs(c, n):
-    out = []
-    for i in range(n, len(c) - n):
-        h = c[i]["h"]
-        if all(h >= c[k]["h"] for k in range(i - n, i + n + 1)):
-            out.append(i)
-    return out
-
-
-def smc_signal(c):
-    if len(c) < MIN_CANDLES:
+# 1) SMC – Strukturbruch + Fair Value Gap -> erster Retest des Order Blocks
+def smc(c, p):
+    n_sw, look, rr = 3, 40, p.get("rr", 2.5)
+    if len(c) < 210:
         return None
     last = len(c) - 1
     closes = [x["c"] for x in c]
-    e200 = ema(closes, 200)
-    a = atr(c)
-    if closes[last] < e200[last]:
-        return None  # nur im übergeordneten Aufwärtstrend kaufen
-
-    highs = _swing_highs(c, SWING_N)
-    # jüngsten Strukturbruch (BOS) suchen
+    if closes[last] < ema(closes, 200)[last]:
+        return None
+    a = atr(c)[last]
+    highs = [i for i in range(n_sw, len(c) - n_sw)
+             if all(c[i]["h"] >= c[k]["h"] for k in range(i - n_sw, i + n_sw + 1))]
     bos = None
-    for j in range(last - 1, max(last - BOS_LOOKBACK, SWING_N * 2), -1):
-        prior = [s for s in highs if s + SWING_N < j]
-        if not prior:
-            continue
-        s = prior[-1]
-        level = c[s]["h"]
-        if c[j]["c"] > level and c[j - 1]["c"] <= level:
-            bos = (s, j, level)
-            break
+    for j in range(last - 1, max(last - look, n_sw * 2), -1):
+        prior = [s for s in highs if s + n_sw < j]
+        if prior:
+            s = prior[-1]
+            lvl = c[s]["h"]
+            if c[j]["c"] > lvl >= c[j - 1]["c"]:
+                bos = (s, j, lvl)
+                break
     if not bos:
         return None
-    s, j, level = bos
-
-    # Start der Impulsbewegung = tiefstes Tief zwischen Swing-Hoch und Bruch
+    s, j, lvl = bos
     lo_i = min(range(s, j + 1), key=lambda k: c[k]["l"])
-    # Order Block = letzte rote Kerze am/vor dem Tief
-    ob_i = None
-    for k in range(lo_i, max(lo_i - 6, 0), -1):
-        if c[k]["c"] < c[k]["o"]:
-            ob_i = k
-            break
-    if ob_i is None:
+    ob = next((k for k in range(lo_i, max(lo_i - 6, 0), -1) if c[k]["c"] < c[k]["o"]), None)
+    if ob is None:
         return None
-    zone_lo, zone_hi = c[ob_i]["l"], c[ob_i]["h"]
-
-    # Verdrängung: es muss eine bullische Fair Value Gap im Impuls geben
-    if not any(c[k - 2]["h"] < c[k]["l"] for k in range(max(ob_i + 2, 2), j + 1)):
+    z_lo, z_hi = c[ob]["l"], c[ob]["h"]
+    if not any(c[k - 2]["h"] < c[k]["l"] for k in range(max(ob + 2, 2), j + 1)):
         return None
-
-    # Zone noch gültig und erster Retest genau jetzt
-    for k in range(j + 1, last):
-        if c[k]["l"] <= zone_hi or c[k]["c"] < zone_lo:
-            return None
+    if any(c[k]["l"] <= z_hi or c[k]["c"] < z_lo for k in range(j + 1, last)):
+        return None
     cur = c[last]
-    if not (cur["l"] <= zone_hi and cur["c"] > zone_lo and cur["c"] > cur["o"]):
+    if not (cur["l"] <= z_hi and cur["c"] > z_lo and cur["c"] > cur["o"]):
         return None
-
-    entry = cur["c"]
-    stop = zone_lo - 0.25 * a[last]
+    entry, stop = cur["c"], z_lo - 0.25 * a
     risk = entry - stop
-    if risk <= 0 or risk / entry > 0.06 or risk / entry < 0.003:
+    if risk <= 0 or not 0.003 < risk / entry < 0.06:
         return None
-    return {
-        "stop": stop,
-        "target": entry + SMC_RR * risk,
-        "reason": f"BOS über {level:.4g}, Retest Order Block {zone_lo:.4g}–{zone_hi:.4g}",
-    }
+    return {"stop": stop, "target": entry + rr * risk,
+            "reason": f"BOS über {lvl:.5g}, Retest Order Block"}
 
 
-# ---------------------------------------------------------------------------
-# 2) Trendfolge – EMA20 kreuzt EMA50 nach oben, Kurs über EMA200, RSI ok
-# ---------------------------------------------------------------------------
-def trend_signal(c):
-    if len(c) < MIN_CANDLES:
+# 2) Trendfolge – schneller EMA kreuzt langsamen nach oben, über EMA200, RSI ok
+def trend(c, p):
+    if len(c) < 210:
         return None
-    closes = [x["c"] for x in c]
-    e20, e50, e200 = ema(closes, 20), ema(closes, 50), ema(closes, 200)
-    r = rsi(closes)
-    a = atr(c)
-    i = len(c) - 1
-    crossed = e20[i - 1] <= e50[i - 1] and e20[i] > e50[i]
-    if not (crossed and closes[i] > e200[i] and 45 < r[i] < 70):
+    cl = [x["c"] for x in c]
+    f, s, e200 = ema(cl, p.get("fast", 20)), ema(cl, p.get("slow", 50)), ema(cl, 200)
+    r, a, i = rsi(cl)[-1], atr(c)[-1], len(c) - 1
+    if not (f[i - 1] <= s[i - 1] and f[i] > s[i] and cl[i] > e200[i] and 45 < r < 70):
         return None
-    entry = closes[i]
-    stop = entry - 2 * a[i]
+    stop = cl[i] - 2 * a
     if stop <= 0:
         return None
-    return {
-        "stop": stop,
-        "target": entry + 4 * a[i],
-        "reason": f"EMA20 kreuzt EMA50, RSI {r[i]:.0f}",
-    }
+    return {"stop": stop, "target": cl[i] + p.get("rr", 2.0) * 2 * a,
+            "reason": f"EMA{p.get('fast', 20)} kreuzt EMA{p.get('slow', 50)}, RSI {r:.0f}"}
 
 
-SIGNALS = {"smc": smc_signal, "trend": trend_signal}
-NAMES = {"smc": "SMC", "trend": "Trendfolge"}
+# 3) Scalping – Rücksetzer an EMA21 im kurzfristigen Aufwärtstrend
+def scalp(c, p):
+    if len(c) < 60:
+        return None
+    cl = [x["c"] for x in c]
+    e9, e21, e50 = ema(cl, 9), ema(cl, 21), ema(cl, 50)
+    i, cur, prev = len(c) - 1, c[-1], c[-2]
+    if not (e9[i] > e21[i] > e50[i]):
+        return None
+    if not (prev["l"] <= e21[i - 1] and cur["c"] > e9[i] and cur["c"] > cur["o"] and rsi(cl)[-1] > 50):
+        return None
+    entry = cur["c"]
+    stop = min(x["l"] for x in c[-4:]) - 0.1 * atr(c)[-1]
+    risk = entry - stop
+    if risk <= 0 or risk / entry < p.get("min_stop", 0.004) or risk / entry > 0.02:
+        return None  # Ziel muss deutlich über den Gebühren liegen
+    return {"stop": stop, "target": entry + p.get("rr", 1.5) * risk, "max_hold": p.get("hold", 24),
+            "reason": "Rücksetzer an EMA21 im Aufwärtstrend"}
+
+
+# 4) Daytrading – Ausbruch aus der Spanne der letzten Stunden mit Volumen, Schluss am Tagesende
+def day(c, p):
+    n = p.get("range", 16)
+    if len(c) < max(60, n + 22):
+        return None
+    cl = [x["c"] for x in c]
+    rng = c[-n - 1:-1]
+    hi = max(x["h"] for x in rng)
+    cur, prev = c[-1], c[-2]
+    vol_ok = cur["v"] > p.get("vol", 1.5) * _avg([x["v"] for x in c[-21:-1]])
+    if not (cur["c"] > hi >= prev["c"] and vol_ok and cur["c"] > ema(cl, 50)[-1]):
+        return None
+    entry, a = cur["c"], atr(c)[-1]
+    stop = entry - 1.5 * a
+    if stop <= 0 or (entry - stop) / entry < 0.004:
+        return None
+    return {"stop": stop, "target": entry + p.get("rr", 2.0) * (entry - stop), "eod": True,
+            "reason": f"Ausbruch über {n}-Kerzen-Hoch mit Volumen"}
+
+
+# 5) Swing (Tageskerzen) – Donchian-Ausbruch, Nachziehen des Stops am n-Tage-Tief
+def swing(c, p):
+    n = p.get("n", 20)
+    if len(c) < max(60, n + 2):
+        return None
+    cl = [x["c"] for x in c]
+    hi = max(x["h"] for x in c[-n - 1:-1])
+    cur = c[-1]
+    if not (cur["c"] > hi and cur["c"] > ema(cl, 50)[-1]):
+        return None
+    stop = cur["c"] - 2 * atr(c)[-1]
+    if stop <= 0:
+        return None
+    return {"stop": stop, "target": cur["c"] * 100, "trail_n": p.get("trail", 10),
+            "reason": f"{n}-Tage-Hoch gebrochen"}
+
+
+# 6) Memecoins – Momentum-Ausbruch mit Volumen-Explosion, enger Trailing-Stop
+def meme(c, p):
+    n = p.get("n", 24)
+    if len(c) < max(60, n + 22):
+        return None
+    cl = [x["c"] for x in c]
+    cur = c[-1]
+    hi = max(x["h"] for x in c[-n - 1:-1])
+    vol_ok = cur["v"] > p.get("vol", 2.0) * _avg([x["v"] for x in c[-21:-1]])
+    r = rsi(cl)[-1]
+    if not (cur["c"] > hi and vol_ok and 55 < r < 85 and cur["c"] > cur["o"]):
+        return None
+    entry, a = cur["c"], atr(c)[-1]
+    stop = entry - 1.5 * a
+    if stop <= 0 or (entry - stop) / entry > 0.12:
+        return None
+    return {"stop": stop, "target": entry + p.get("rr", 3.0) * (entry - stop), "trail_n": 8,
+            "max_hold": 96, "reason": f"Ausbruch mit {cur['v'] / max(_avg([x['v'] for x in c[-21:-1]]), 1e-12):.1f}x Volumen"}
+
+
+SIGNALS = {"smc": smc, "trend": trend, "scalp": scalp, "day": day, "swing": swing, "meme": meme}

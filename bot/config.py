@@ -1,30 +1,72 @@
-"""Zentrale Einstellungen des Bots. Hier kannst du alles anpassen."""
+"""Zentrale Einstellungen: Märkte, Bots, Risiko. Hier kannst du alles anpassen."""
 import os
 
 # "paper" = Demo mit Spielgeld und echten Live-Kursen. "live" ist bewusst noch nicht eingebaut.
 MODE = os.environ.get("BOT_MODE", "paper")
 
-# Handelspaare auf Kraken (Anzeigename -> Kraken-Paar-Code)
-PAIRS = {
-    "BTC/EUR": "XBTEUR",
-    "ETH/EUR": "ETHEUR",
-    "LTC/EUR": "LTCEUR",
-    "SOL/EUR": "SOLEUR",
+POOL_START_EUR = 8000.0       # Spielgeld im Sammelkonto (Demo)
+MAX_DRAWDOWN_STOP = 0.25      # Not-Aus je Bot: −25 % vom Höchststand -> keine neuen Trades
+MIN_ORDER_EUR = 10.0
+
+# --- Märkte (Kraken-Paarnamen) ----------------------------------------------
+CRYPTO = ["XBTEUR", "ETHEUR", "LTCEUR", "SOLEUR", "XRPEUR"]
+MEMES = ["DOGEEUR", "SHIBEUR", "PEPEEUR", "BONKEUR", "WIFEUR", "FLOKIEUR"]
+FOREX = ["EURUSD", "GBPUSD", "AUDUSD", "USDJPY", "USDCHF", "USDCAD"]
+STOCKS = ["AAPLxUSD", "NVDAxUSD", "TSLAxUSD", "MSFTxUSD", "SPYxUSD", "QQQxUSD"]  # Kraken xStocks
+
+# --- Bots --------------------------------------------------------------------
+# tf = Kerzenlänge in Minuten. variants = Parameter-Sets, zwischen denen der Bot
+# anhand seiner Ergebnisse selbst wählt (Lern-Modul).
+_BASE = dict(risk=0.02, max_pos=3, frac=0.33, fee=0.004, slip=0.001, aclass=None)
+
+BOTS = {
+    "scalp": dict(_BASE, name="Scalping", style="Minuten", tf=5, market="Krypto", pairs=CRYPTO,
+                  strategy="scalp", variants=[
+                      {"rr": 1.5, "min_stop": 0.004, "hold": 24},
+                      {"rr": 2.0, "min_stop": 0.006, "hold": 36},
+                      {"rr": 2.5, "min_stop": 0.008, "hold": 48}]),
+    "day": dict(_BASE, name="Daytrading", style="15 Minuten", tf=15, market="Krypto", pairs=CRYPTO,
+                strategy="day", variants=[
+                    {"range": 16, "vol": 1.5, "rr": 2.0},
+                    {"range": 32, "vol": 1.5, "rr": 2.0},
+                    {"range": 16, "vol": 2.0, "rr": 3.0}]),
+    "smc": dict(_BASE, name="SMC", style="Stunden", tf=60, market="Krypto", pairs=CRYPTO,
+                strategy="smc", variants=[{"rr": 2.5}, {"rr": 2.0}, {"rr": 3.0}]),
+    "trend": dict(_BASE, name="Trendfolge", style="Stunden", tf=60, market="Krypto", pairs=CRYPTO,
+                  strategy="trend", variants=[
+                      {"fast": 20, "slow": 50, "rr": 2.0},
+                      {"fast": 10, "slow": 30, "rr": 2.0},
+                      {"fast": 20, "slow": 50, "rr": 3.0}]),
+    "swing": dict(_BASE, name="Swing", style="Tage", tf=1440, market="Krypto", pairs=CRYPTO,
+                  strategy="swing", variants=[
+                      {"n": 20, "trail": 10}, {"n": 55, "trail": 20}, {"n": 10, "trail": 5}]),
+    "meme": dict(_BASE, name="Memecoins", style="15 Minuten", tf=15, market="Memecoins", pairs=MEMES,
+                 strategy="meme", risk=0.01, max_pos=2, frac=0.25, slip=0.003, variants=[
+                     {"n": 24, "vol": 2.0, "rr": 3.0},
+                     {"n": 48, "vol": 2.5, "rr": 3.0},
+                     {"n": 24, "vol": 3.0, "rr": 4.0}]),
+    "fx": dict(_BASE, name="Forex", style="4 Stunden", tf=240, market="Währungen", pairs=FOREX,
+               strategy="trend", fee=0.002, slip=0.0002, variants=[
+                   {"fast": 20, "slow": 50, "rr": 2.0},
+                   {"fast": 10, "slow": 30, "rr": 2.0},
+                   {"fast": 20, "slow": 50, "rr": 3.0}]),
+    "stocks": dict(_BASE, name="Aktien", style="Stunden", tf=60, market="Aktien", pairs=STOCKS,
+                   strategy="trend", aclass="tokenized_asset", variants=[
+                       {"fast": 20, "slow": 50, "rr": 2.0},
+                       {"fast": 10, "slow": 30, "rr": 2.0},
+                       {"fast": 20, "slow": 50, "rr": 3.0}]),
 }
 
-CANDLE_MINUTES = 60          # 1-Stunden-Kerzen
-START_BALANCE_EUR = 1000.0   # Spielgeld pro Strategie in der Demo
-
-RISK_PER_TRADE = 0.02        # 2 % des Guthabens Verlust pro Trade, wenn der Stop-Loss greift
-MAX_OPEN_POSITIONS = 3       # max. gleichzeitige Positionen pro Strategie
-MAX_POSITION_FRACTION = 0.33 # eine Position darf max. 33 % des Guthabens binden (kein Hebel)
-FEE_RATE = 0.004             # Kraken Taker-Gebühr (0,40 %), bewusst pessimistisch
-SLIPPAGE = 0.001             # 0,1 % schlechterer Kurs als angezeigt (realistischer)
-BREAKEVEN_AT_R = 1.0         # Stop auf Einstand ziehen, sobald 1x Risiko im Plus
-MAX_DRAWDOWN_STOP = 0.25     # Not-Aus: bei -25 % vom Höchststand keine neuen Trades mehr
-
-STRATEGIES = ["smc", "trend"]
-
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-STATE_DIR = os.path.join(ROOT, "state")
+STATE_DIR = os.path.join(ROOT, "state", "v2")
+ALLOC_FILE = os.path.join(ROOT, "config", "allocation.json")
 STATUS_FILE = os.path.join(ROOT, "docs", "data", "status.json")
+
+
+def display(pair):
+    """XBTEUR -> BTC/EUR, AAPLxUSD -> AAPL/USD"""
+    base, quote = pair[:-3], pair[-3:]
+    base = {"XBT": "BTC"}.get(base, base)
+    if base.endswith("x") and len(base) > 2:
+        base = base[:-1]
+    return f"{base}/{quote}"
