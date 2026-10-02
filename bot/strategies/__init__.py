@@ -6,7 +6,7 @@ Ein Signal ist ein dict: {"stop", "target", "reason"} und optional
 Strategien entscheiden NUR über Signale – Geld, Risiko und Team-Regeln liegen woanders.
 Gekauft wird immer erst zum Eröffnungskurs der nächsten Kerze (kein Blick in die Zukunft).
 """
-from . import day, meme, minervini, momentum, rsi2, scalp, smc, swing, trend
+from . import day, meme, minervini, momentum, patterns, rsi2, scalp, smc, swing, trend
 
 WINDOW = 260  # so viele Kerzen bekommt jede Strategie
 
@@ -20,6 +20,7 @@ SIGNALS = {
     "rsi2": rsi2.signal,
     "minervini": minervini.signal,
     "momentum": momentum.signal,
+    "patterns": patterns.signal,   # Muster-Bibliothek (siehe patterns.py)
 }
 
 EXITS = {

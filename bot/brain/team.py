@@ -7,7 +7,8 @@ from .. import settings as S
 from ..bots import BOTS, TEAMS
 from ..markets import REGIME_NAMES, display
 from ..trading import account as A
-from . import analyst, news_analyst, risk
+from ..strategies.patterns import LABELS as PATTERN_LABELS
+from . import analyst, learning, news_analyst, risk
 
 R = S.TEAM_RULES
 
@@ -95,6 +96,17 @@ class Team:
             if f != 1:
                 why.append(f"Markt {r['label']}{' + hohe Schwankung' if r['vol_high'] and calm_market else ''} x{f:g}")
             m *= f
+        LR = S.LEARN_RULES
+        if sig.get("pattern"):
+            why.append(f"Muster-Trade „{PATTERN_LABELS[sig['pattern']]}“ (halbes Risiko)")
+        warn = sig.get("warn") or []
+        if warn:
+            m *= LR["pattern_warn"]
+            why.append(f"Warnmuster {PATTERN_LABELS[warn[0]]} x{LR['pattern_warn']:g}")
+        conf = [p for p in (sig.get("confirm") or []) if p in learning.learned_patterns(self.states[bid])]
+        if conf and not sig.get("pattern"):
+            m *= LR["pattern_confirm"]
+            why.append(f"bestätigt durch {PATTERN_LABELS[conf[0]]} x{LR['pattern_confirm']:g}")
         if analyst.htf_against(bot, pair, t_entry):
             m *= R["htf_against"]
             why.append(f"größerer Trend dagegen x{R['htf_against']:g}")

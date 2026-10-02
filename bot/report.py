@@ -1,6 +1,10 @@
 """Baut die Übersicht für die Handy-App (docs/data/status.json). Hier wird nur zusammengefasst –
 keine Handels-Entscheidungen."""
+import time
+
 from . import settings as S
+from .brain import learning as L
+from .strategies.patterns import LABELS as PATTERN_LABELS
 from .markets import display
 from .trading import account as A
 from .trading.runner import LABELS
@@ -52,7 +56,9 @@ def bot_status(bot, st, weight, team, scores, unavailable):
             "active": LABELS[st["active"]],
             "variants": [{"label": LABELS[i], "params": bot["variants"][i], "trades": s[1],
                           "avg_r": round(s[2], 2), "score": round(s[0], 3)} for i, s in enumerate(scores)],
-            "paused": [display(p) for p, m in st["pair_mult"].items() if m == 0],
+            "paused": [{"pair": display(p), "until": u} for p, u in st.get("pair_pause", {}).items() if u > time.time()],
+            "patterns": [] if onchain else sorted(({"id": k, "label": PATTERN_LABELS[k], **v} for k, v in L.pattern_stats(st).items()),
+                               key=lambda x: ({"gelernt": 0, "beobachtet": 1, "verworfen": 2}[x["status"]], -x["trades"])),
             "log": list(reversed(st["log"][-10:])),
         },
     }

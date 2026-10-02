@@ -79,7 +79,7 @@ HEADLINES = [
 ]
 
 
-def _news(errors):
+def _news(errors, cache=None):
     r = random.Random(_seed("news", NOW[0] // 1800))
     k = (NOW[0] - T0) // 1800
     heavy = 10 <= k <= 20                     # in Lauf 10–20 gibt es eine "Krise"

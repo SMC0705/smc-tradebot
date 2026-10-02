@@ -219,11 +219,15 @@ function viewDetail(id) {
   <div class="card"><div class="lbl">${esc(b.name)} · ${esc(b.market)} · ${esc(b.style)} · ${b.weight} % vom Konto${b.team && data.teams && data.teams[b.team] ? " · " + esc(data.teams[b.team].name) : ""}</div>
     <div class="big">${eur(b.equity)}</div><div class="pct ${cls(b.pnl_pct)}">${pc(b.pnl_pct)} (${eur(b.pnl)})</div>${chart(b.curve)}
     <div class="stats"><div><b>${s.trades}</b><span>Trades</span></div><div><b>${s.winrate == null ? "–" : s.winrate + " %"}</b><span>Treffer</span></div>
-    <div><b>${s.avg_r == null ? "–" : (s.avg_r > 0 ? "+" : "") + s.avg_r}</b><span>Ø R</span></div><div><b>-${s.max_drawdown_pct} %</b><span>Max. Rückg.</span></div></div></div>
+    <div><b>${s.avg_r == null ? "–" : (s.avg_r > 0 ? "+" : "") + s.avg_r}</b><span>Ø R</span></div><div><b>${s.max_drawdown_pct ? "-" + s.max_drawdown_pct : 0} %</b><span>Max. Rückg.</span></div></div></div>
   <h2>Lernen</h2><div class="card">
-    <div class="lbl">Aktive Variante: <b class="act">${esc(L.active)}</b>${L.paused.length ? " · pausiert: " + L.paused.map(esc).join(", ") : ""}</div>
+    <div class="lbl">Aktive Variante: <b class="act">${esc(L.active)}</b>${L.paused.length ? " · Pause: " + L.paused.map(p => typeof p === "string" ? esc(p) : `${esc(p.pair)} bis ${when(p.until)}`).join(", ") : ""}</div>
     <table><tr><th>Var.</th><th>Einstellung</th><th>Trades</th><th>Ø R</th></tr>
     ${L.variants.map(v => `<tr><td class="${v.label === L.active ? "act" : ""}">${v.label}</td><td class="mut">${esc(Object.entries(v.params).map(([k, x]) => k + " " + x).join(", "))}</td><td>${v.trades}</td><td class="${cls(v.avg_r)}">${v.avg_r}</td></tr>`).join("")}</table>
+    ${(L.patterns || []).some(p => p.trades) ? `<div class="lbl" style="margin-top:14px">Muster – im Hintergrund getestet. Gelernte Muster handelt der Bot zusätzlich (halbes Risiko).</div>
+    <table><tr><th>Muster</th><th>Tests</th><th>Ø R</th><th>Status</th></tr>
+    ${L.patterns.filter(p => p.trades).map(p => `<tr><td>${esc(p.label)}</td><td>${p.trades}</td><td class="${cls(p.avg_r)}">${p.avg_r}</td>
+      <td class="${p.status === "gelernt" ? "up" : p.status === "verworfen" ? "down" : "mut"}">${esc(p.status)}</td></tr>`).join("")}</table>` : ""}
     ${L.log.length ? L.log.map(([t, m]) => `<div class="log">${esc(m)}<span>${when(t)}</span></div>`).join("") : '<div class="log mut">Noch keine Anpassungen</div>'}
   </div>
   <h2>Offene Trades</h2><div class="card">${posRows(b.positions)}</div>

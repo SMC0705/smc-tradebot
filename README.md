@@ -9,7 +9,7 @@ Wie der Code aufgebaut ist und wo was liegt, steht in **[ARCHITEKTUR.md](ARCHITE
 
 | Team | Bot | Takt | Idee (Vorbild) |
 |---|---|---|---|
-| Krypto | Scalping | 5 Min. | Rücksetzer an EMA21; Variante „Holy Grail“ nur bei starkem Trend (Linda Raschke) |
+| Krypto (10 Coins: BTC, ETH, LTC, SOL, XRP, ADA, DOT, LINK, AVAX, ATOM) | Scalping | 5 Min. | Rücksetzer an EMA21; Variante „Holy Grail“ nur bei starkem Trend (Linda Raschke) |
 | Krypto | Daytrading | 15 Min. | Ausbruch mit Volumen bzw. Volatilitäts-Ausbruch (Larry Williams), Schluss am Tagesende |
 | Krypto | SMC | 1 Std. | Strukturbruch + Fair Value Gap → Retest des Order Blocks |
 | Krypto | Trendfolge | 1 Std. | EMA-Kreuzung im Aufwärtstrend |
@@ -26,7 +26,18 @@ Für alle gilt: nur Kauf (Long), **kein Hebel**, immer mit Stop-Loss, Gebühren 
 Not-Aus bei −25 %, nach einem Verkauf 3 Kerzen Pause. Werte, die Kraken nicht anbietet, werden übersprungen und in der App angezeigt.
 
 **Lernen:** Jeder Bot testet 3 Varianten parallel mit Schatten-Konten (zum Start mit bis zu 500 vergangenen Kerzen).
-Das echte Konto folgt der Variante, die nachweislich am besten läuft. Schwache Werte bekommen weniger Risiko.
+Das echte Konto folgt der Variante, die nachweislich am besten läuft. Schwache Werte bekommen weniger Risiko oder
+höchstens 24 Std. Pause (nur aufgrund von Live-Ergebnissen), danach gibt es einen neuen Versuch mit halbem Risiko.
+
+**Muster:** Alle Bots kennen 12 klassische Kaufmuster (Doppelboden, Umgekehrte Schulter-Kopf-Schulter, Bullen-Flagge,
+Aufsteigendes Dreieck, Ausbruch + Retest, RSI-Divergenz, Bollinger-Squeeze, Inside Bar, Morgenstern, Drei weiße Soldaten,
+Engulfing, Hammer) und 7 Warnmuster (Doppeltop, Schulter-Kopf-Schulter, bärisches Engulfing, Sternschnuppe, Abendstern,
+Drei schwarze Krähen, bärische RSI-Divergenz). Jeder Bot testet alle Muster auf seinem Markt und Takt.
+Was sich nach Gebühren bewährt, handelt er zusätzlich (halbes Risiko), was verliert, wird verworfen.
+Warnmuster halbieren das Risiko eines Kaufs, ein passendes gelerntes Kaufmuster erhöht es leicht.
+
+**Gebühren-Filter:** Ein Trade wird nur gemacht, wenn der Stop mindestens 1,5× so weit weg ist wie Kauf und Verkauf an
+Gebühren kosten (bei Kraken 2 × 0,4 %). Sehr kleine Minuten-Trades fallen deshalb weg, weil sie fast nur Gebühren erzeugen.
 
 **Teams:** Jedes Team hat einen **Analysten** (Marktlage und größerer Trend), einen **Risiko-Manager** (Pausen nach Verlustserien,
 Kollegen-Warnungen, Limits gegen Klumpenrisiko) und Konsens (Kollege im Plus → etwas mehr Risiko).

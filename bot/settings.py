@@ -10,6 +10,20 @@ POOL_START_EUR = 8000.0                      # Spielgeld im Sammelkonto
 MIN_ORDER_EUR = 10.0                         # kleinere Käufe lässt Kraken nicht zu
 MAX_DRAWDOWN_STOP = 0.25                     # Not-Aus je Bot: −25 % vom besten Stand -> keine neuen Trades
 WARMUP_CANDLES = 500                         # Schatten-Varianten lernen beim Start aus so vielen alten Kerzen
+ENGINE_VERSION = "4.2"                       # ändert sich die Handelslogik, startet das Lernen neu
+MIN_RISK_FEE_MULT = 1.5                      # Stop muss mind. 1,5x so weit weg sein wie Kauf+Verkauf an Gebühren kosten
+
+# --- Lernen ---------------------------------------------------------------------------
+LEARN_RULES = {
+    "pair_pause_h": 24,         # schwacher Wert: höchstens 24 Std. Pause, danach neuer Versuch mit halbem Risiko
+    "pair_pause_n": 10,         # Pause erst ab 10 Trades seit Live-Start ...
+    "pair_pause_r": -0.6,       # ... wenn sie im Schnitt mehr als 0,6 R verloren haben
+    "pattern_min_trades": 12,   # ein Muster gilt als "gelernt" ab 12 Test-Trades ...
+    "pattern_min_score": 0.08,  # ... mit klar positivem Ergebnis (Summe R / (Anzahl + 5))
+    "pattern_risk": 0.5,        # gelernte Muster handelt das echte Konto zusätzlich mit halbem Risiko
+    "pattern_confirm": 1.2,     # Signal + gelerntes Kaufmuster gleichzeitig -> 1,2x Risiko
+    "pattern_warn": 0.5,        # Warnmuster (z. B. Doppeltop) beim Kauf -> halbes Risiko
+}
 
 # --- Marktlage (Analyst): Risiko-Faktor je Marktlage --------------------------------
 REGIME_DEFAULT = {"Aufwärts": 1.0, "Seitwärts": 0.75, "Abwärts": 0.5}
@@ -18,7 +32,7 @@ REGIME_TREND = {"Aufwärts": 1.0, "Seitwärts": 0.5, "Abwärts": 0.0}   # Trendf
 # --- Team-Regeln (Risiko-Manager, Konsens) -------------------------------------------
 TEAM_RULES = {
     "pair_warning_h": 2,        # nach Stop-Loss eines Kollegen: Wert 2 Std. für das Team gesperrt
-    "sl_guard_count": 4,        # 4 Stop-Losses im Team ...
+    "sl_guard_count": 6,        # 6 Stop-Losses im Team ...
     "sl_guard_h": 6,            # ... innerhalb von 6 Std. ...
     "sl_guard_pause_h": 4,      # ... -> 4 Std. Pause für neue Trades
     "dd_limit": 0.08,           # Team verliert in 24 Std. mehr als 8 % ...

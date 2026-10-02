@@ -7,6 +7,7 @@ Bewertet wird in brain/news_analyst.py.
 """
 import json
 import time
+import urllib.error
 import urllib.parse
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
@@ -80,12 +81,29 @@ def _domains():
 
 
 def _gdelt(params):
+    """GDELT-Abfrage. GDELT erlaubt ca. 1 Anfrage je 5 Sek. und blockt geteilte Server-Adressen
+    (wie bei GitHub) öfter mit 429 – dann einmal kurz warten und erneut versuchen."""
     url = GDELT + "?" + urllib.parse.urlencode(dict(params, format="json"))
-    raw = http.fetch(url, "gdelt", gap=6.0, timeout=30)   # GDELT bittet um max. 1 Anfrage je 5 Sek.
-    return json.loads(raw.decode("utf-8"))
+    for attempt in (1, 2):
+        try:
+            raw = http.fetch(url, "gdelt", gap=6.0, timeout=30)
+            return json.loads(raw.decode("utf-8"))
+        except urllib.error.HTTPError as e:
+            if e.code != 429 or attempt == 2:
+                raise
+            time.sleep(10)
 
 
-def gdelt_spikes(errors, ok, failed):
+def _cached(cache, key, label, ok, max_age=3 * 3600):
+    """Letzte erfolgreiche GDELT-Daten (bis 3 Std. alt) statt gar nichts."""
+    c = (cache or {}).get(key)
+    if c and time.time() - c["t"] <= max_age:
+        ok.append(f"{label} (Stand {time.strftime('%H:%M', time.gmtime(c['t']))} UTC)")
+        return c["data"]
+    return None
+
+
+def gdelt_spikes(errors, ok, failed, cache=None):
     """Wie viel wird gerade über ein Thema berichtet – im Vergleich zu den letzten 7 Tagen?
     spike = Artikel der letzten 6 Std. / üblicher 6-Std.-Wert (Median)."""
     out = {}
@@ -102,22 +120,34 @@ def gdelt_spikes(errors, ok, failed):
             base = windows[len(windows) // 2] if windows else 0
             out[theme] = {"recent": int(recent), "base": round(base, 1), "spike": round(recent / max(base, 1.0), 2)}
             ok.append(f"GDELT {theme}")
+            if cache is not None:
+                cache[f"gdelt_{theme}"] = {"t": int(time.time()), "data": out[theme]}
         except Exception as e:
-            failed.append(f"GDELT {theme}")
-            errors.append(f"GDELT ({theme}): {str(e)[:80]}")
+            old = _cached(cache, f"gdelt_{theme}", f"GDELT {theme}", ok)
+            if old:
+                out[theme] = old
+            else:
+                failed.append(f"GDELT {theme}")
+                errors.append(f"GDELT ({theme}): {str(e)[:80]}")
     return out
 
 
-def gdelt_articles(errors, ok, failed):
+def gdelt_articles(errors, ok, failed, cache=None):
     """Aktuelle Schlagzeilen seriöser Redaktionen zu Krieg, Öl, Zöllen, Sanktionen."""
     q = "(war OR invasion OR missile OR oil OR opec OR tariffs OR sanctions OR crash)"
     try:
         d = _gdelt({"query": f"{q} {_domains()}", "mode": "artlist", "maxrecords": 30,
                     "timespan": "12h", "sort": "datedesc"})
         ok.append("GDELT Schlagzeilen")
-        return [{"src": a.get("domain", "GDELT"), "title": a.get("title", ""), "link": a.get("url", ""),
+        arts = [{"src": a.get("domain", "GDELT"), "title": a.get("title", ""), "link": a.get("url", ""),
                  "t": _ts(a.get("seendate", ""))} for a in d.get("articles", []) if a.get("title")]
+        if cache is not None:
+            cache["gdelt_articles"] = {"t": int(time.time()), "data": arts}
+        return arts
     except Exception as e:
+        old = _cached(cache, "gdelt_articles", "GDELT Schlagzeilen", ok)
+        if old is not None:
+            return old
         failed.append("GDELT Schlagzeilen")
         errors.append(f"GDELT (Schlagzeilen): {str(e)[:80]}")
         return []
@@ -143,11 +173,11 @@ def load_termine():
         return []
 
 
-def collect(errors):
-    """Alles in einem Rutsch holen (ca. 30 Sek.)."""
+def collect(errors, cache=None):
+    """Alles in einem Rutsch holen (ca. 30 Sek.). cache = Zwischenspeicher für GDELT (im Zustand gespeichert)."""
     ok, failed = [], []
     headlines = rss_headlines(errors, ok, failed)
-    spikes = gdelt_spikes(errors, ok, failed)
-    headlines += gdelt_articles(errors, ok, failed)
+    spikes = gdelt_spikes(errors, ok, failed, cache)
+    headlines += gdelt_articles(errors, ok, failed, cache)
     return {"headlines": headlines, "gdelt": spikes, "fear_greed": fear_greed(errors),
             "termine": load_termine(), "ok": ok, "failed": failed, "fetched": int(time.time())}

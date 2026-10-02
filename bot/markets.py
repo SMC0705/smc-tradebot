@@ -3,20 +3,26 @@ Nachrichten-Themen sie gehören. Paare, die Kraken nicht anbietet, werden automa
 übersprungen und in der App angezeigt – man kann hier also gefahrlos Kandidaten eintragen.
 """
 # Kraken-Paarnamen
-CRYPTO = ["XBTEUR", "ETHEUR", "LTCEUR", "SOLEUR", "XRPEUR"]
+CRYPTO = ["XBTEUR", "ETHEUR", "LTCEUR", "SOLEUR", "XRPEUR", "ADAEUR", "DOTEUR", "LINKEUR", "AVAXEUR", "ATOMEUR"]
 MEMES = ["DOGEEUR", "SHIBEUR", "PEPEEUR", "BONKEUR", "WIFEUR", "FLOKIEUR"]
 FOREX = ["EURUSD", "GBPUSD", "AUDUSD", "USDJPY", "USDCHF", "USDCAD"]
 # Kraken xStocks (Aktien als Token): KI-/Tech-Werte, Palantir und Indizes
 STOCKS = ["NVDAxUSD", "PLTRxUSD", "MSFTxUSD", "GOOGLxUSD", "METAxUSD", "AMZNxUSD", "AAPLxUSD", "AMDxUSD",
           "AVGOxUSD", "TSMxUSD", "ORCLxUSD", "ARMxUSD", "CRWDxUSD", "INTCxUSD", "TSLAxUSD", "SPYxUSD", "QQQxUSD"]
-# Krisen-Werte: Gold (PAXG = tokenisiertes Gold), Energie, Rüstung, Öl-/Gold-ETFs (falls bei Kraken vorhanden)
-CRISIS = ["PAXGEUR", "XOMxUSD", "CVXxUSD", "LMTxUSD", "RTXxUSD", "NOCxUSD", "GDxUSD", "USOxUSD", "GLDxUSD"]
+# Krisen-Werte (Kraken xStocks + PAXG). Einzelne Rüstungsaktien (Lockheed, RTX, Northrop, General Dynamics)
+# und der Öl-ETF USO gibt es bei Kraken nicht – der Rüstungs-ETF ITA enthält sie aber alle.
+CRISIS = [
+    "PAXGEUR", "GLDxUSD", "GDXxUSD",                       # Gold, Gold-ETF, Goldminen-ETF
+    "ITAxUSD", "XARxUSD", "SHLDxUSD", "LHXxUSD", "BAxUSD",  # Rüstung: ETFs (ITA, XAR, SHLD) und Einzelwerte
+    "XOMxUSD", "CVXxUSD", "BKRxUSD", "XLExUSD", "OXYxUSD", "SLBxUSD",  # Öl & Energie
+]
 
 # Zu welchen Nachrichten-Themen ein Krisen-Wert passt (siehe settings.THEMES)
+_GOLD, _WAR, _OIL = ["krieg", "crash", "zoelle"], ["krieg"], ["oel", "krieg"]
 ASSET_THEMES = {
-    "PAXGEUR": ["krieg", "crash", "zoelle"], "GLDxUSD": ["krieg", "crash", "zoelle"],
-    "XOMxUSD": ["oel", "krieg"], "CVXxUSD": ["oel", "krieg"], "USOxUSD": ["oel", "krieg"],
-    "LMTxUSD": ["krieg"], "RTXxUSD": ["krieg"], "NOCxUSD": ["krieg"], "GDxUSD": ["krieg"],
+    **{p: _GOLD for p in ("PAXGEUR", "GLDxUSD", "GDXxUSD")},
+    **{p: _WAR for p in ("ITAxUSD", "XARxUSD", "SHLDxUSD", "LHXxUSD", "BAxUSD")},
+    **{p: _OIL for p in ("XOMxUSD", "CVXxUSD", "BKRxUSD", "XLExUSD", "OXYxUSD", "SLBxUSD")},
 }
 
 # Woran man einen Coin in Schlagzeilen erkennt (für Hack-/Klage-Warnungen)
@@ -24,12 +30,16 @@ COIN_WORDS = {
     "XBTEUR": ["bitcoin", "btc"], "ETHEUR": ["ethereum", "ether"], "SOLEUR": ["solana"],
     "XRPEUR": ["xrp", "ripple"], "LTCEUR": ["litecoin"], "DOGEEUR": ["dogecoin"], "SHIBEUR": ["shiba"],
     "PEPEEUR": ["pepe"], "BONKEUR": ["bonk"], "WIFEUR": ["dogwifhat"], "FLOKIEUR": ["floki"],
+    "ADAEUR": ["cardano"], "DOTEUR": ["polkadot"], "LINKEUR": ["chainlink"], "AVAXEUR": ["avalanche"],
+    "ATOMEUR": ["cosmos"],
 }
 
 # Marktlage-Quellen des Analysten
 REGIME_NAMES = {"XBTEUR": "Bitcoin", "SOLEUR": "Solana", "SPYxUSD": "S&P 500"}
 
-NAMES = {"PAXGEUR": "Gold (PAXG)/EUR"}
+NAMES = {"PAXGEUR": "Gold (PAXG)/EUR", "GLDxUSD": "Gold-ETF GLD/USD", "GDXxUSD": "Goldminen-ETF GDX/USD",
+         "ITAxUSD": "Rüstungs-ETF ITA/USD", "XARxUSD": "Rüstungs-ETF XAR/USD", "SHLDxUSD": "Rüstungs-ETF SHLD/USD",
+         "XLExUSD": "Energie-ETF XLE/USD"}
 
 
 def display(pair):

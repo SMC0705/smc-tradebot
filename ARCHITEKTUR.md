@@ -20,6 +20,7 @@ smc-tradebot/
 │  ├─ strategies/            2) SIGNALE – "Kaufen? Wo ist der Stop? Wo das Ziel?"
 │  │  ├─ __init__.py         Verzeichnis aller Strategien (SIGNALS, EXITS)
 │  │  ├─ indicators.py       EMA, SMA, RSI, ATR, ADX
+│  │  ├─ patterns.py         MUSTER-BIBLIOTHEK: 12 Kauf- und 7 Warnmuster (Kerzen + Chartformationen)
 │  │  └─ trend, smc, scalp, day, swing, meme, rsi2, minervini, momentum (.py)
 │  ├─ trading/               3) AUSFÜHREN – Geld, Positionen, Stops
 │  │  ├─ account.py          Konto: kaufen, verkaufen, Stop/Ziel/Trailing, Kerzen nachspielen
@@ -27,7 +28,7 @@ smc-tradebot/
 │  │  ├─ pumpfun.py          Sonderfall pump.fun (Scan + Filter + Ausführung)
 │  │  └─ pool.py             Sammelkonto: Aufteilung auf die Bots, Umbuchungen
 │  └─ brain/                 4) ENTSCHEIDEN – über den einzelnen Bots
-│     ├─ learning.py         Varianten-Lernen + Risiko je Wert
+│     ├─ learning.py         Lernen: Varianten, Muster (gelernt/verworfen), Risiko je Wert (Pause max. 24 Std.)
 │     ├─ analyst.py          Marktlage (Aufwärts/Seitwärts/Abwärts) + größerer Trend
 │     ├─ news_analyst.py     Nachrichtenlage, Termin-Sperren, Coin-Warnungen, Krisen-Themen
 │     ├─ risk.py             Risiko-Manager: Team-Pausen, Kollegen-Warnung, Klumpenrisiko
@@ -51,20 +52,26 @@ smc-tradebot/
 4. **Bots laufen lassen** (trading/runner.py), je Wert:
    1. neue Kerzen holen
    2. Schatten-Varianten spielen sie durch (ohne Team-Regeln → ehrlicher Vergleich, zum Lernen)
-   3. das echte Konto spielt sie mit der aktiven Variante durch. Vor jedem Kauf fragt es das Team: `team.gate()`
+   3. das Muster-Schattenkonto testet alle Muster der Bibliothek auf diesem Markt und Takt
+   4. das echte Konto spielt sie mit der aktiven Variante durch und handelt zusätzlich die *gelernten* Muster
+      (halbes Risiko). Vor jedem Kauf fragt es das Team: `team.gate()`
 5. **Abschluss:** Sammelkonto umverteilen, alles speichern, `docs/data/status.json` für die App schreiben.
 
 ## Weg eines Trades
-`Strategie.signal()` (bei Kerzenschluss) → wartet als „pending“ → nächste Kerze: `team.gate()` gibt einen Risiko-Faktor
+`Strategie.signal()` bzw. gelerntes Muster (bei Kerzenschluss) → Gebühren-Filter `account.worth_it()`
+(Stop mind. 1,5× so weit weg wie Kauf+Verkauf an Gebühren kosten) → wartet als „pending“ → nächste Kerze: `team.gate()` gibt einen Risiko-Faktor
 (0 = nicht kaufen, sonst 0,25…1,5) → `account.open_position()` (Größe nach Risiko, Gebühren, Slippage) →
 jede weitere Kerze `account.manage()`: Stop, Ziel, Zeitablauf, Tagesende, Signal-Ausstieg, Stop nachziehen →
 `account.close_position()` → Trade wird im Konto gespeichert (Gewinn in € und in R = Vielfaches des Risikos).
 
 Reihenfolge in `team.gate()`: Team-Pause → Nachrichten (Termin-Sperre, Coin-Warnung, Krisen-Thema, Nachrichtenlage,
-Gier) → Kollegen-Warnung → Klumpenrisiko → Marktlage → größerer Trend → Konsens. Jede Entscheidung landet im Team-Protokoll.
+Gier) → Kollegen-Warnung → Klumpenrisiko → Marktlage → Warnmuster (x0,5) / bestätigendes gelerntes Muster (x1,2)
+→ größerer Trend → Konsens. Jede Entscheidung landet im Team-Protokoll.
 
 ## Rezepte
 - **Neuen Bot anlegen:** Eintrag in `bot/bots.py` (Strategie wählen, 3 Varianten) + Gewicht in `config/allocation.json`.
+- **Neues Muster:** Funktion in `bot/strategies/patterns.py` schreiben, in `BULLISH` eintragen, Namen in `LABELS`.
+  Jeder Bot testet es danach automatisch und handelt es erst, wenn es sich bewährt.
 - **Neue Strategie:** neue Datei in `bot/strategies/` mit `signal(c, p)` (optional `exit_signal`), in `strategies/__init__.py` eintragen.
 - **Neue Werte:** Liste in `bot/markets.py` ergänzen. Nicht vorhandene Werte werden automatisch übersprungen.
 - **Neue Nachrichtenquelle:** RSS-Adresse in `settings.NEWS_FEEDS` bzw. Redaktion in `settings.NEWS_DOMAINS`. Nur seriöse Quellen!
@@ -72,6 +79,7 @@ Gier) → Kollegen-Warnung → Klumpenrisiko → Marktlage → größerer Trend 
 - **Termine:** `config/termine.json` (Zeit in UTC).
 - **Regeln/Grenzwerte ändern:** nur in `bot/settings.py`.
 - **Varianten ändern:** Das Lernen dieses Bots startet automatisch neu. Das echte Konto bleibt.
+- **Handelslogik grundlegend ändern:** `settings.ENGINE_VERSION` erhöhen → alle Bots lernen neu (aus der Vergangenheit).
 
 ## Regeln für sauberen Code
 1. `main.py` enthält nur den Ablauf. Logik gehört in die Ordner.

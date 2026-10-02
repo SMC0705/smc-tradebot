@@ -34,7 +34,7 @@ def run():
 
     # 2) Daten
     rates = kraken.eur_rates(errors)
-    situation = news_analyst.assess(news.collect(errors), now)
+    situation = news_analyst.assess(news.collect(errors, nstate.setdefault("cache", {})), now)
     news_analyst.track(nstate, situation, now)
 
     # 3) Gehirn
