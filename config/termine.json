@@ -1,0 +1,31 @@
+{
+ "hinweis": "Wichtige Wirtschaftstermine in UTC. Rund um diese Zeiten machen Kurzfrist-Bots keine neuen Trades. Quellen: federalreserve.gov (FOMC), ecb.europa.eu (EZB), bls.gov/schedule (US-Inflation CPI, US-Arbeitsmarkt). Neue Termine einfach unten ergänzen.",
+ "termine": [
+  {"name": "US-Arbeitsmarktdaten", "utc": "2026-10-02T12:30"},
+  {"name": "US-Inflationsdaten (CPI)", "utc": "2026-10-14T12:30"},
+  {"name": "Fed-Zinsentscheid", "utc": "2026-10-28T18:00"},
+  {"name": "EZB-Zinsentscheid", "utc": "2026-10-29T13:15"},
+  {"name": "US-Arbeitsmarktdaten", "utc": "2026-11-06T13:30"},
+  {"name": "US-Inflationsdaten (CPI)", "utc": "2026-11-10T13:30"},
+  {"name": "US-Arbeitsmarktdaten", "utc": "2026-12-04T13:30"},
+  {"name": "Fed-Zinsentscheid", "utc": "2026-12-09T19:00"},
+  {"name": "US-Inflationsdaten (CPI)", "utc": "2026-12-10T13:30"},
+  {"name": "EZB-Zinsentscheid", "utc": "2026-12-17T13:15"},
+  {"name": "Fed-Zinsentscheid", "utc": "2027-01-27T19:00"},
+  {"name": "EZB-Zinsentscheid", "utc": "2027-02-04T13:15"},
+  {"name": "Fed-Zinsentscheid", "utc": "2027-03-17T18:00"},
+  {"name": "EZB-Zinsentscheid", "utc": "2027-03-18T13:15"},
+  {"name": "Fed-Zinsentscheid", "utc": "2027-04-28T18:00"},
+  {"name": "EZB-Zinsentscheid", "utc": "2027-04-29T12:15"},
+  {"name": "Fed-Zinsentscheid", "utc": "2027-06-09T18:00"},
+  {"name": "EZB-Zinsentscheid", "utc": "2027-06-10T12:15"},
+  {"name": "EZB-Zinsentscheid", "utc": "2027-07-22T12:15"},
+  {"name": "Fed-Zinsentscheid", "utc": "2027-07-28T18:00"},
+  {"name": "EZB-Zinsentscheid", "utc": "2027-09-09T12:15"},
+  {"name": "Fed-Zinsentscheid", "utc": "2027-09-15T18:00"},
+  {"name": "Fed-Zinsentscheid", "utc": "2027-10-27T18:00"},
+  {"name": "EZB-Zinsentscheid", "utc": "2027-10-28T12:15"},
+  {"name": "Fed-Zinsentscheid", "utc": "2027-12-08T19:00"},
+  {"name": "EZB-Zinsentscheid", "utc": "2027-12-16T13:15"}
+ ]
+}

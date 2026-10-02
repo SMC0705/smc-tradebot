@@ -56,6 +56,12 @@ input[type=password],input[type=text]{width:100%;background:var(--bg);border:1px
 details summary{cursor:pointer;font-weight:600}
 ol{margin:8px 0 0 18px;font-size:13px;color:var(--mut)}ol li{margin:3px 0}
 .foot{color:var(--mut);font-size:12px;text-align:center;margin-top:14px}
+.warnc{color:var(--warn)}.news-b{cursor:pointer}
+.team-h{display:flex;justify-content:space-between;align-items:flex-end;gap:10px;margin:20px 4px 8px;cursor:pointer}
+.team-h b{font-size:16px}.team-h .r{text-align:right;white-space:nowrap}.team-h .r b,.team-h .r span{display:block}.team-h .r span{font-size:12px}
+.team-h .sub{margin-top:4px}.chip.up{color:var(--up);background:#22c55e1f}.chip.down{color:var(--down);background:#ef44441f}
+select{background:var(--bg);color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:3px 6px;font:inherit;font-size:12px;margin-left:6px}
+.tsum{color:var(--mut);font-size:12px;margin:10px 0 0;text-transform:uppercase;letter-spacing:.4px;font-weight:600}
 #toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#22262f;color:var(--txt);padding:10px 16px;border-radius:10px;font-size:14px;display:none;max-width:90%}
 </style>
 </head>
@@ -64,7 +70,7 @@ ol{margin:8px 0 0 18px;font-size:13px;color:var(--mut)}ol li{margin:3px 0}
 <div id="warn"></div>
 <main id="view"></main>
 <div class="foot" id="upd"></div>
-<nav><div><button data-tab="bots" class="on">Bots</button><button data-tab="konto">Konto</button></div></nav>
+<nav><div><button data-tab="bots" class="on">Bots</button><button data-tab="news">News</button><button data-tab="konto">Konto</button></div></nav>
 <div id="toast"></div>
 
 <script>
@@ -73,11 +79,12 @@ const pc = v => (v > 0 ? "+" : "") + (v ?? 0).toLocaleString("de-DE", {maximumFr
 const cls = v => v > 0 ? "up" : v < 0 ? "down" : "";
 const when = t => new Date(t * 1000).toLocaleString("de-DE", {day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit"});
 const px = v => v == null ? "–" : Number(v).toLocaleString("de-DE", {maximumSignificantDigits: 6});
+const safeUrl = u => /^https?:\/\//.test(u || "") ? u : "#";
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
 const $ = id => document.getElementById(id);
 const store = {get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
                set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }};
-let data = null, tab = "bots", detail = null, draft = null;
+let data = null, tab = "bots", detail = null, teamView = null, draft = null, draftTeams = null;
 
 function repo() {
   const h = location.hostname, parts = location.pathname.split("/").filter(Boolean);
@@ -117,28 +124,99 @@ function posRows(list) {
     : '<div class="empty">Keine offenen Trades</div>';
 }
 
+const REG = {"Aufwärts": "up", "Abwärts": "down", "Seitwärts": ""};
+const regChip = r => `<span class="chip ${REG[r.label] ?? ""}">${esc(r.src)}: ${esc(r.label)}</span>`;
+
+function botRow(id) {
+  const b = data.bots[id];
+  return `<div class="row bot ${b.enabled ? "" : "off"}" data-bot="${id}"><div class="l"><b>${esc(b.name)}${b.halted ? " ⛔" : ""}</b>
+      <span><span class="chip">${esc(b.market)}</span><span class="chip">${esc(b.style)}</span>${b.positions.length ? b.positions.length + " offen" : ""}</span></div>
+    <div class="r"><b>${eur(b.equity)}</b><span class="${cls(b.pnl_pct)}">${b.enabled ? pc(b.pnl_pct) : "aus"}</span></div></div>`;
+}
+
 function viewBots() {
-  const P = data.pool, B = data.bots;
+  const P = data.pool, B = data.bots, TM = data.teams || {};
   const ids = Object.keys(B).sort((a, b) => (B[b].enabled - B[a].enabled) || (B[b].pnl_pct - B[a].pnl_pct));
   const allTrades = ids.flatMap(id => B[id].trades.map(t => ({...t, bot: B[id].name}))).sort((a, b) => b.closed_t - a.closed_t).slice(0, 10);
   const allPos = ids.flatMap(id => B[id].positions.map(p => ({...p, bot: B[id].name})));
+  const teams = Object.keys(TM).filter(t => TM[t].members.length);
+  const groups = teams.length ? teams.map(tid => { const t = TM[tid]; return `
+    <div class="team-h" data-team="${tid}"><div><b>${esc(t.name)} ›</b>
+      <div class="sub">${t.paused_until ? `<span class="chip down">Pause bis ${when(t.paused_until)}</span>` : ""}${t.regimes.map(regChip).join("")}</div></div>
+      <div class="r"><b>${eur(t.equity)}</b><span class="${cls(t.pnl_pct)}">${pc(t.pnl_pct)}</span></div></div>
+    <div class="card">${ids.filter(id => t.members.includes(id)).map(botRow).join("")}</div>`; }).join("")
+    : `<h2>Bots</h2><div class="card">${ids.map(botRow).join("")}</div>`;
   return `
   <div class="card"><div class="lbl">Sammelkonto gesamt</div><div class="big">${eur(P.equity)}</div>
     <div class="pct ${cls(P.pnl_pct)}">${pc(P.pnl_pct)} seit Start</div>${chart(P.curve)}</div>
-  <h2>Bots</h2><div class="card">${ids.map(id => { const b = B[id]; return `
-    <div class="row bot ${b.enabled ? "" : "off"}" data-bot="${id}"><div class="l"><b>${esc(b.name)}${b.halted ? " ⛔" : ""}</b>
-      <span><span class="chip">${esc(b.market)}</span><span class="chip">${esc(b.style)}</span>${b.positions.length ? b.positions.length + " offen" : ""}</span></div>
-    <div class="r"><b>${eur(b.equity)}</b><span class="${cls(b.pnl_pct)}">${b.enabled ? pc(b.pnl_pct) : "aus"}</span></div></div>`; }).join("")}</div>
+  ${newsBanner()}
+  ${groups}
   <h2>Offene Trades</h2><div class="card">${posRows(allPos)}</div>
   <h2>Letzte Trades</h2><div class="card">${tradeRows(allTrades)}</div>`;
 }
 
+const LVL = l => l === 2 ? "down" : l === 1 ? "warnc" : "up";
+
+function newsBanner() {
+  const N = data.news;
+  if (!N) return "";
+  const sub = N.event_now ? `Termin-Sperre: ${esc(N.event_now.name)}`
+    : N.upcoming && N.upcoming[0] ? `Nächster Termin: ${esc(N.upcoming[0].name)} · ${when(N.upcoming[0].t)}` : "";
+  return `<div class="card news-b" data-tab="news"><div class="row" style="padding:0;border:0">
+    <div class="l"><b>Nachrichtenlage: <span class="${LVL(N.level)}">${esc(N.level_text)}</span></b><span>${sub}</span></div>
+    <div class="r"><b>›</b></div></div></div>`;
+}
+
+function viewNews() {
+  const N = data.news;
+  if (!N) return '<div class="empty">Noch keine Nachrichtendaten – kommen mit dem nächsten Lauf.</div>';
+  const label = Object.fromEntries(N.themes.map(t => [t.id, t.label]));
+  return `
+  <div class="card"><div class="lbl">Nachrichtenlage</div><div class="big ${LVL(N.level)}">${esc(N.level_text)}</div>
+    <div class="lbl">${N.reasons.length ? N.reasons.map(esc).join(" · ") : "Keine auffälligen Meldungen in den letzten 6 Std."}</div>
+    <div class="lbl" style="margin-top:8px">Wirkung: ${N.level ? `alle Bots kaufen mit ${N.level === 2 ? "halbem" : "75 %"} Risiko (Krisen-Bot ausgenommen)` : "keine Einschränkung"}</div>
+    ${N.event_now ? `<div class="warn" style="margin:10px 0 0">Termin-Sperre: ${esc(N.event_now.name)} (${when(N.event_now.t)}) – Kurzfrist-Bots kaufen gerade nicht</div>` : ""}
+    ${N.hint ? `<div class="info" style="margin:10px 0 0">${esc(N.hint)}</div>` : ""}</div>
+  <h2>Themen (letzte 6 Std.)</h2><div class="card">${N.themes.map(t => `
+    <div class="row"><div class="l"><b>${esc(t.label)}</b><span>${t.count} Meldungen${t.spike ? ` · weltweit ${String(t.spike).replace(".", ",")}× so viel wie üblich` : ""}</span></div>
+    <div class="r"><b class="${t.active ? "down" : "mut"}">${t.active ? "aktiv" : "ruhig"}</b></div></div>`).join("")}</div>
+  ${N.pauses.length ? `<h2>Pausierte Werte</h2><div class="card">${N.pauses.map(p => `
+    <div class="row"><div class="l"><b>${esc(p.pair)}</b><span>${esc(p.title)} (${esc(p.src)})</span></div><div class="r"><span>bis ${when(p.until)}</span></div></div>`).join("")}</div>` : ""}
+  <h2>Nächste Termine</h2><div class="card">${N.upcoming.length ? N.upcoming.map(e => `
+    <div class="row"><div class="l"><b>${esc(e.name)}</b></div><div class="r"><b>${when(e.t)}</b></div></div>`).join("") : '<div class="empty">Keine Termine eingetragen</div>'}</div>
+  ${N.fear_greed ? `<h2>Krypto-Stimmung</h2><div class="card"><div class="row"><div class="l"><b>Fear & Greed Index</b><span>${esc(N.fear_greed.label)} · ab 80 kaufen Krypto-Bots vorsichtiger</span></div>
+    <div class="r"><b>${N.fear_greed.value} / 100</b></div></div></div>` : ""}
+  <h2>Wichtige Meldungen</h2><div class="card">${N.headlines.length ? N.headlines.map(h => `
+    <div class="log"><a href="${esc(safeUrl(h.link))}" target="_blank" rel="noopener" style="color:inherit">${esc(h.title)}</a>
+    <span>${esc(h.src)} · ${when(h.t)} · ${h.themes.map(t => esc(label[t] || t)).join(", ")}</span></div>`).join("") : '<div class="empty">Keine passenden Meldungen</div>'}</div>
+  <h2>Protokoll</h2><div class="card">${N.log.length ? N.log.map(([t, m]) => `<div class="log">${esc(m)}<span>${when(t)}</span></div>`).join("") : '<div class="empty">Noch keine Änderungen</div>'}</div>
+  <div class="foot">Quellen: ${N.sources.ok.map(esc).join(", ") || "–"}${N.sources.failed.length ? `<br>Nicht erreichbar: ${N.sources.failed.map(esc).join(", ")}` : ""}</div>`;
+}
+
+function viewTeam(tid) {
+  const t = data.teams[tid];
+  return `<button class="back" data-back>‹ Übersicht</button>
+  <div class="card"><div class="lbl">${esc(t.name)} · ${t.members.length} Bots</div><div class="big">${eur(t.equity)}</div>
+    <div class="pct ${cls(t.pnl_pct)}">${pc(t.pnl_pct)} (${eur(t.pnl)})</div></div>
+  <h2>Analyst – Marktlage</h2><div class="card">${t.regimes.length ? t.regimes.map(r => `
+    <div class="row"><div class="l"><b>${esc(r.src)}: <span class="${REG[r.label] ?? ""}">${esc(r.label)}</span></b><span>${esc(r.detail)}</span></div></div>`).join("")
+    : '<div class="empty">Kein gemeinsamer Markt – dieses Team richtet sich nach den Nachrichten und dem Kurs jedes einzelnen Werts.</div>'}
+    <div class="lbl" style="margin-top:8px">Vor jedem Kauf prüft der Analyst außerdem den größeren Trend des Werts.</div></div>
+  <h2>Risiko-Manager</h2><div class="card">
+    <div class="row"><div class="l">Status</div><div class="r"><b class="${t.paused_until ? "down" : "up"}">${t.paused_until ? "Pause bis " + when(t.paused_until) : "Handelt"}</b></div></div>
+    <div class="row"><div class="l">Stop-Losses (letzte 6 Std.)</div><div class="r"><b>${t.stops} von max. ${t.stops_limit}</b></div></div>
+    <div class="row"><div class="l">Investiert</div><div class="r"><b>${t.exposure_pct} % (max. ${t.exposure_limit} %)</b></div></div></div>
+  <h2>Team-Protokoll</h2><div class="card">${t.log.length ? t.log.map(([ts, m]) => `<div class="log">${esc(m)}<span>${when(ts)}</span></div>`).join("")
+    : '<div class="empty">Noch keine Team-Entscheidungen</div>'}</div>
+  <h2>Mitglieder</h2><div class="card">${t.members.map(botRow).join("")}</div>`;
+}
+
 function viewDetail(id) {
   const b = data.bots[id], L = b.learning, s = b.stats;
-  return `<button class="back" data-back>‹ Alle Bots</button>
+  return `<button class="back" data-back>‹ Zurück</button>
   ${b.unavailable.length ? `<div class="info">Bei Kraken nicht verfügbar: ${b.unavailable.map(esc).join(", ")}</div>` : ""}
   ${b.scan ? `<div class="info">Letzter Scan ${when(b.scan.t)}: ${b.scan.found} pump.fun-Coins gefunden, ${b.scan.passed} haben die Sicherheitsfilter bestanden.</div>` : ""}
-  <div class="card"><div class="lbl">${esc(b.name)} · ${esc(b.market)} · ${esc(b.style)} · ${b.weight} % vom Konto</div>
+  <div class="card"><div class="lbl">${esc(b.name)} · ${esc(b.market)} · ${esc(b.style)} · ${b.weight} % vom Konto${b.team && data.teams && data.teams[b.team] ? " · " + esc(data.teams[b.team].name) : ""}</div>
     <div class="big">${eur(b.equity)}</div><div class="pct ${cls(b.pnl_pct)}">${pc(b.pnl_pct)} (${eur(b.pnl)})</div>${chart(b.curve)}
     <div class="stats"><div><b>${s.trades}</b><span>Trades</span></div><div><b>${s.winrate == null ? "–" : s.winrate + " %"}</b><span>Treffer</span></div>
     <div><b>${s.avg_r == null ? "–" : (s.avg_r > 0 ? "+" : "") + s.avg_r}</b><span>Ø R</span></div><div><b>-${s.max_drawdown_pct} %</b><span>Max. Rückg.</span></div></div></div>
@@ -152,11 +230,21 @@ function viewDetail(id) {
   <h2>Letzte Trades</h2><div class="card">${tradeRows(b.trades)}</div>`;
 }
 
+const sumOf = () => Object.values(draft || {}).reduce((a, b) => a + b, 0);
+
 function viewKonto() {
   const P = data.pool, B = data.bots;
   if (!draft) draft = Object.fromEntries(Object.keys(B).map(id => [id, Math.round(B[id].weight)]));
-  const sum = Object.values(draft).reduce((a, b) => a + b, 0);
-  const total = P.equity;
+  const TN = Object.fromEntries(Object.entries(data.teams || {}).map(([k, t]) => [k, t.name]));
+  if (!draftTeams) draftTeams = Object.fromEntries(Object.keys(B).map(id => [id, B[id].team || Object.keys(TN)[0]]));
+  const S = P.suggestion;
+  const slider = id => `<div class="slider"><div class="top"><b>${esc(B[id].name)}${Object.keys(TN).length ? `<select data-tsel="${id}">${Object.entries(TN).map(([k, n]) => `<option value="${k}" ${draftTeams[id] === k ? "selected" : ""}>${esc(n)}</option>`).join("")}</select>` : ""}</b>
+      <span data-wl="${id}">${draft[id]} % · ${eur(sumOf() ? P.equity * draft[id] / sumOf() : 0)}</span></div>
+      <input type="range" min="0" max="100" step="5" value="${draft[id]}" data-w="${id}"></div>`;
+  const groups = Object.keys(TN).length ? Object.keys(TN).map(tid => { const ids = Object.keys(draft).filter(id => draftTeams[id] === tid);
+      return ids.length ? `<div class="tsum" data-tsum="${tid}">${esc(TN[tid])}: ${ids.reduce((a, id) => a + draft[id], 0)} %</div>${ids.map(slider).join("")}` : ""; }).join("")
+    : Object.keys(draft).map(slider).join("");
+  const sum = sumOf();
   const hasToken = !!store.get("gh_token");
   return `
   <div class="card"><div class="lbl">Sammelkonto</div><div class="big">${eur(P.equity)}</div>
@@ -164,15 +252,20 @@ function viewKonto() {
     <div class="row" style="margin-top:10px"><div class="l">Nicht zugeteilt</div><div class="r"><b>${eur(P.unallocated)}</b></div></div>
     ${P.rebalancing ? '<div class="lbl" style="margin-top:6px">Umverteilung läuft – Geld in offenen Trades wird nachgeholt.</div>' : ""}</div>
   <h2>Aufteilung auf die Bots</h2><div class="card">
-    ${Object.keys(draft).map(id => `<div class="slider"><div class="top"><b>${esc(B[id].name)}</b>
-      <span data-wl="${id}">${draft[id]} % · ${eur(sum ? total * draft[id] / sum : 0)}</span></div>
-      <input type="range" min="0" max="100" step="5" value="${draft[id]}" data-w="${id}"></div>`).join("")}
+    ${groups}
     <div class="row"><div class="l">Summe</div><div class="r"><b id="wsum" class="${sum === 100 ? "up" : "down"}">${sum} %</b></div></div>
     <div class="lbl">0 % = Bot aus. Offene Trades laufen zu Ende, danach geht das Geld zurück in den Topf. ${sum !== 100 ? "Beim Speichern wird automatisch auf 100 % umgerechnet." : ""}</div>
     <button class="btn sec" data-equal>Gleich verteilen</button>
     <button class="btn" data-save ${hasToken ? "" : "disabled"}>Aufteilung speichern</button>
-    ${hasToken ? "" : '<div class="lbl" style="margin-top:8px">Zum Speichern unten einmalig die Verbindung einrichten.</div>'}
+    ${hasToken ? "" : '<div class="lbl" style="margin-top:8px">Zum Speichern unten einmalig die Verbindung einrichten (oder am PC die Datei config/allocation.json bearbeiten).</div>'}
   </div>
+  ${S ? `<h2>Portfolio-Manager</h2><div class="card">${S.ready ? `
+    <div class="lbl">Vorschlag nach den bisherigen Ergebnissen: mehr Geld für Bots mit besserem Ergebnis pro Risiko (je 5–30 %). Du entscheidest.</div>
+    ${Object.keys(S.weights).filter(id => draft[id] > 0 || S.weights[id] > 0).map(id => `<div class="row"><div class="l">${esc(B[id].name)}</div>
+      <div class="r"><b>${draft[id]} % → <span class="${S.weights[id] > draft[id] ? "up" : S.weights[id] < draft[id] ? "down" : ""}">${S.weights[id]} %</span></b></div></div>`).join("")}
+    <button class="btn sec" data-sugg>Vorschlag in die Regler übernehmen</button>
+    <div class="lbl" style="margin-top:6px">Danach noch „Aufteilung speichern“ drücken.</div>`
+    : `<div class="lbl">Sammelt noch Daten: ${S.trades} von ${S.needed} Trades. Danach macht der Portfolio-Manager einen Vorschlag für die Aufteilung.</div>`}</div>` : ""}
   <h2>Einzahlung</h2><div class="card"><div class="lbl">Litecoin (LTC) einzahlen</div>
     <div style="margin-top:6px">Kommt mit dem Echtgeld-Modus. Dann steht hier deine Kraken-Einzahlungsadresse. Eingezahlte LTC werden in EUR umgewandelt und landen als „nicht zugeteilt“ im Topf – danach automatisch nach deiner Aufteilung verteilt.</div></div>
   <h2>Verbindung</h2><div class="card"><details ${hasToken ? "" : "open"}><summary>${hasToken ? "✓ Verbunden – ändern" : "GitHub-Schlüssel einrichten"}</summary>
@@ -188,12 +281,14 @@ function viewKonto() {
 function render() {
   if (!data) { $("view").innerHTML = '<div class="warn">Noch keine Daten. Läuft der Bot schon?</div>'; return; }
   document.querySelectorAll("nav button").forEach(b => b.classList.toggle("on", b.dataset.tab === tab));
-  $("view").innerHTML = tab === "konto" ? viewKonto() : detail && data.bots[detail] ? viewDetail(detail) : viewBots();
+  $("view").innerHTML = tab === "konto" ? viewKonto() : tab === "news" ? viewNews() : detail && data.bots[detail] ? viewDetail(detail)
+    : teamView && data.teams && data.teams[teamView] ? viewTeam(teamView) : viewBots();
   const age = (Date.now() / 1000 - data.updated_at) / 60, w = [];
   if (age > 120) w.push(`Letzte Aktualisierung vor ${Math.round(age / 60)} Std. – Bot prüfen.`);
   const halted = Object.values(data.bots).filter(b => b.halted).map(b => b.name);
   if (halted.length) w.push("Not-Aus aktiv (−25 %): " + halted.map(esc).join(", "));
-  if (data.errors && data.errors.length) w.push("Hinweise vom letzten Lauf: " + data.errors.map(esc).join(" · "));
+  const errs = (data.errors || []).filter(e => !/^(Nachrichtenquelle|GDELT|Fear)/.test(e));
+  if (errs.length) w.push("Hinweise vom letzten Lauf: " + errs.slice(0, 4).map(esc).join(" · ") + (errs.length > 4 ? ` (+${errs.length - 4})` : ""));
   $("warn").innerHTML = w.map(x => `<div class="warn">${x}</div>`).join("");
   $("upd").innerHTML = `Stand: ${when(data.updated_at)} · <a href="#" id="reload" style="color:var(--acc)">Aktualisieren</a>`;
 }
@@ -212,7 +307,7 @@ async function saveAllocation() {
     const cur = await fetch(`${api}/contents/config/allocation.json`, {headers: h, cache: "no-store"});
     if (cur.ok) sha = (await cur.json()).sha;
     else if (cur.status === 401 || cur.status === 403) throw new Error("Schlüssel ungültig oder ohne Rechte");
-    const body = JSON.stringify({weights}, null, 1) + "\n";
+    const body = JSON.stringify(draftTeams ? {weights, teams: draftTeams} : {weights}, null, 1) + "\n";
     const put = await fetch(`${api}/contents/config/allocation.json`, {method: "PUT", headers: h,
       body: JSON.stringify({message: "Aufteilung über App geändert", content: btoa(body), sha})});
     if (!put.ok) throw new Error(`GitHub-Fehler ${put.status}`);
@@ -223,12 +318,14 @@ async function saveAllocation() {
 }
 
 document.addEventListener("click", e => {
-  const t = e.target.closest("[data-tab],[data-bot],[data-back],[data-equal],[data-save],[data-tok],#reload");
+  const t = e.target.closest("[data-tab],[data-bot],[data-team],[data-back],[data-equal],[data-save],[data-tok],[data-sugg],#reload");
   if (!t) return;
   if (t.id === "reload") { e.preventDefault(); load(); return; }
-  if (t.dataset.tab) { tab = t.dataset.tab; detail = null; draft = null; }
+  if (t.dataset.tab) { tab = t.dataset.tab; detail = null; teamView = null; draft = null; draftTeams = null; window.scrollTo(0, 0); }
   else if (t.dataset.bot) { detail = t.dataset.bot; window.scrollTo(0, 0); }
-  else if (t.hasAttribute("data-back")) detail = null;
+  else if (t.dataset.team) { teamView = t.dataset.team; window.scrollTo(0, 0); }
+  else if (t.hasAttribute("data-back")) { if (detail) detail = null; else teamView = null; }
+  else if (t.hasAttribute("data-sugg")) { draft = {...data.pool.suggestion.weights}; toast("Vorschlag übernommen – jetzt speichern"); }
   else if (t.hasAttribute("data-equal")) { const ids = Object.keys(draft); ids.forEach(k => draft[k] = Math.floor(100 / ids.length / 5) * 5); draft[ids[0]] += 100 - Object.values(draft).reduce((a, b) => a + b, 0); }
   else if (t.hasAttribute("data-save")) { saveAllocation(); return; }
   else if (t.hasAttribute("data-tok")) { const v = $("tok").value.trim(); if (v) { store.set("gh_token", v); toast("Schlüssel gespeichert"); } }
@@ -240,6 +337,12 @@ document.addEventListener("input", e => {
   const sum = Object.values(draft).reduce((a, b) => a + b, 0);
   for (const id in draft) { const el = document.querySelector(`[data-wl="${id}"]`); if (el) el.textContent = `${draft[id]} % · ${eur(sum ? data.pool.equity * draft[id] / sum : 0)}`; }
   $("wsum").textContent = sum + " %"; $("wsum").className = sum === 100 ? "up" : "down";
+  document.querySelectorAll("[data-tsum]").forEach(el => { const tid = el.dataset.tsum;
+    el.textContent = `${data.teams[tid].name}: ${Object.keys(draft).filter(id => draftTeams[id] === tid).reduce((a, id) => a + draft[id], 0)} %`; });
+});
+document.addEventListener("change", e => {
+  if (!e.target.dataset.tsel) return;
+  draftTeams[e.target.dataset.tsel] = e.target.value; render();
 });
 document.addEventListener("visibilitychange", () => { if (!document.hidden && tab !== "konto") load(); });
 setInterval(() => { if (tab !== "konto") load(); }, 5 * 60 * 1000);

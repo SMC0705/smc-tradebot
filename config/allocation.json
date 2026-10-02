@@ -1,1 +1,2 @@
-{"weights": {"scalp": 10, "day": 10, "smc": 15, "trend": 10, "swing": 15, "meme": 5, "pump": 5, "fx": 10, "stocks": 20}}
+{"weights": {"scalp": 5, "day": 5, "smc": 10, "trend": 10, "swing": 15, "meme": 5, "pump": 5,
+             "stocks": 10, "minervini": 10, "rsi2": 10, "fx": 5, "krise": 10}}
