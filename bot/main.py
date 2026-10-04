@@ -43,11 +43,16 @@ def run():
     team.guard()
 
     # 4) Bots
-    scores, unavailable = {}, {}
+    scores, unavailable, skipped = {}, {}, []
     for b, bot in BOTS.items():
         unavailable[b] = []
-        gate = (lambda bid: (lambda pair, sig, t: team.gate(bid, pair, sig, t)))(b)
-        scores[b] = runner.run(b, bot, states[b], rates, weights[b] > 0, errors, unavailable[b], gate)
+        if time.time() - now > S.RUN_BUDGET_MIN * 60:   # Zeitlimit: Rest im nächsten Lauf
+            skipped.append(bot["name"])
+            scores[b] = runner.scores_only(bot, states[b])
+            continue
+        scores[b] = runner.run(b, bot, states[b], rates, weights[b] > 0, errors, unavailable[b], team.gate_for(b))
+    if skipped:
+        errors.append(f"Zeitlimit erreicht – im nächsten Lauf dran: {', '.join(skipped)}")
 
     # 5) Sammelkonto, Speichern, Übersicht
     for b, amount in P.rebalance(pool, {b: s["real"] for b, s in states.items()}, weights):

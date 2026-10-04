@@ -8,6 +8,7 @@ import sys
 import tempfile
 
 from bot import settings as S
+from bot.markets import us_session
 
 from . import fake_markets as F
 
@@ -21,6 +22,12 @@ def check(status, k):
         assert b["cash"] >= -0.01, f"Lauf {k}: {bid} hat negatives Geld"
         assert math.isfinite(b["equity"]), f"Lauf {k}: {bid} Guthaben ungültig"
         assert len(b["positions"]) <= BOTS[bid]["max_pos"], f"Lauf {k}: {bid} zu viele Positionen"
+        for o in b.get("orders", []):
+            assert o["type"] in ("limit", "market"), f"Lauf {k}: {bid} unbekannte Order {o}"
+        if BOTS[bid].get("session") == "us":   # Börsen-Bot: nach Börsenschluss nichts mehr offen
+            sess = us_session(status["updated_at"])
+            if not sess or status["updated_at"] >= sess[1] + 60:
+                assert not b["positions"], f"Lauf {k}: {bid} hält nach Börsenschluss noch {b['positions']}"
     assert set(status["teams"]) and status["news"] is not None
 
 

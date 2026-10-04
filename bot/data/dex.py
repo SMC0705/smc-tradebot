@@ -1,6 +1,7 @@
 """Kostenlose On-Chain-Marktdaten für Solana/pump.fun:
 - DexScreener (Scan, großzügige Limits)
-- GeckoTerminal (Kerzen, ohne Schlüssel max. ~10 Anfragen/Minute)
+- GeckoTerminal (Listen + Kerzen, ohne Schlüssel nur wenige Anfragen pro Minute)
+Ergebnisse werden pro Lauf zwischengespeichert.
 """
 from datetime import datetime
 
@@ -9,10 +10,13 @@ from . import http
 GT = "https://api.geckoterminal.com/api/v2"
 DS = "https://api.dexscreener.com"
 _gap = {"gt": 6.5, "ds": 1.1}
+_memo = {}   # pro Lauf: beide pump.fun-Bots teilen sich Listen und Kerzen (spart Abrufe)
 
 
 def _get(src, url):
-    return http.get_json(url, src, gap=_gap[src])
+    if url not in _memo:
+        _memo[url] = http.get_json(url, src, gap=_gap[src])
+    return _memo[url]
 
 
 def _f(x, default=0.0):

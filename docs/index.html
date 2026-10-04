@@ -124,6 +124,53 @@ function posRows(list) {
     : '<div class="empty">Keine offenen Trades</div>';
 }
 
+function orderRows(list) {
+  return list.map(o => `
+    <div class="row"><div class="l"><b>${esc(o.pair)}</b><span>${o.bot ? esc(o.bot) + " · " : ""}${esc(o.reason || "")}</span></div>
+    <div class="r"><b>${o.type === "limit" ? "Limit " + px(o.price) : "Marktpreis"}</b><span>${o.type === "limit" && o.until < 4e9 ? "gilt bis " + when(o.until) : "nächste Kerze"}</span></div></div>`).join("");
+}
+
+const pct2 = v => String(Math.round(v * 100) / 100).replace(".", ",") + " %";
+
+function checkTotals() {
+  const sum = {signals: 0, too_small: 0, own: 0, team: 0, unfilled: 0, bought: 0}; let last = 0;
+  for (const b of Object.values(data.bots)) {
+    const c = b.checks;
+    if (!c || !c.last_t) continue;
+    last = Math.max(last, c.last_t);
+    for (const k in sum) sum[k] += (c.day || {})[k] || 0;
+  }
+  return {sum, last};
+}
+
+function checkCard() {
+  const {sum, last} = checkTotals();
+  if (!last) return "";
+  const why = [];
+  if (sum.too_small) why.push(`${sum.too_small} zu klein für die Gebühren`);
+  if (sum.team) why.push(`${sum.team} vom Team gestoppt`);
+  if (sum.own) why.push(`${sum.own} durch eigene Regeln`);
+  if (sum.unfilled) why.push(`${sum.unfilled} Limit nicht gefüllt`);
+  return `<div class="card"><div class="lbl">Die Bots prüfen alle 30 Minuten · letzte Prüfung ${when(last)}</div>
+    <div style="margin-top:4px"><b>24 Std.: ${sum.signals} Kaufsignale → ${sum.bought} Käufe</b></div>
+    ${why.length ? `<div class="lbl" style="margin-top:2px">Nicht gekauft: ${why.join(" · ")}</div>` : ""}</div>`;
+}
+
+function checkView(b) {
+  const c = b.checks, e = b.exec;
+  if (!c || !c.last_t) return "";
+  const d = c.day;
+  return `<h2>Prüfprotokoll</h2><div class="card">
+    <div class="lbl">Letzte Prüfung ${when(c.last_t)} · ${c.pairs} Werte · ${d.candles} neue Kerzen in 24 Std.</div>
+    <div class="stats"><div><b>${d.signals}</b><span>Signale</span></div><div><b>${d.too_small}</b><span>zu klein</span></div>
+      <div><b>${d.team + d.own}</b><span>abgelehnt</span></div><div><b>${d.bought}</b><span>gekauft</span></div></div>
+    ${d.unfilled ? `<div class="lbl" style="margin-top:8px">${d.unfilled} Limit-Orders nicht gefüllt (Kurs kam nicht zurück)</div>` : ""}
+    ${e ? `<div class="lbl" style="margin-top:8px">${e.entry === "limit" ? `Kauft per Limit-Order (Gebühr ${pct2(e.maker)}, sofort ${pct2(e.taker)})` : `Kauft sofort zum Marktpreis (Gebühr ${pct2(e.taker)})`}. Gekauft wird nur, wenn der Stop mind. ${pct2(e.min_stop)} entfernt ist – sonst fressen die Gebühren den Gewinn.</div>` : ""}
+    ${b.orders && b.orders.length ? `<div class="lbl" style="margin-top:12px">Wartende Kauf-Orders</div>${orderRows(b.orders)}` : ""}
+    ${c.notes.length ? c.notes.map(([t, m]) => `<div class="log">${esc(m)}<span>${when(t)}</span></div>`).join("") : '<div class="log mut">In den letzten Läufen gab es kein Kaufsignal.</div>'}
+  </div>`;
+}
+
 const REG = {"Aufwärts": "up", "Abwärts": "down", "Seitwärts": ""};
 const regChip = r => `<span class="chip ${REG[r.label] ?? ""}">${esc(r.src)}: ${esc(r.label)}</span>`;
 
@@ -139,6 +186,7 @@ function viewBots() {
   const ids = Object.keys(B).sort((a, b) => (B[b].enabled - B[a].enabled) || (B[b].pnl_pct - B[a].pnl_pct));
   const allTrades = ids.flatMap(id => B[id].trades.map(t => ({...t, bot: B[id].name}))).sort((a, b) => b.closed_t - a.closed_t).slice(0, 10);
   const allPos = ids.flatMap(id => B[id].positions.map(p => ({...p, bot: B[id].name})));
+  const allOrders = ids.flatMap(id => (B[id].orders || []).map(o => ({...o, bot: B[id].name})));
   const teams = Object.keys(TM).filter(t => TM[t].members.length);
   const groups = teams.length ? teams.map(tid => { const t = TM[tid]; return `
     <div class="team-h" data-team="${tid}"><div><b>${esc(t.name)} ›</b>
@@ -150,7 +198,9 @@ function viewBots() {
   <div class="card"><div class="lbl">Sammelkonto gesamt</div><div class="big">${eur(P.equity)}</div>
     <div class="pct ${cls(P.pnl_pct)}">${pc(P.pnl_pct)} seit Start</div>${chart(P.curve)}</div>
   ${newsBanner()}
+  ${checkCard()}
   ${groups}
+  ${allOrders.length ? `<h2>Wartende Kauf-Orders</h2><div class="card">${orderRows(allOrders)}</div>` : ""}
   <h2>Offene Trades</h2><div class="card">${posRows(allPos)}</div>
   <h2>Letzte Trades</h2><div class="card">${tradeRows(allTrades)}</div>`;
 }
@@ -215,11 +265,12 @@ function viewDetail(id) {
   const b = data.bots[id], L = b.learning, s = b.stats;
   return `<button class="back" data-back>‹ Zurück</button>
   ${b.unavailable.length ? `<div class="info">Bei Kraken nicht verfügbar: ${b.unavailable.map(esc).join(", ")}</div>` : ""}
-  ${b.scan ? `<div class="info">Letzter Scan ${when(b.scan.t)}: ${b.scan.found} pump.fun-Coins gefunden, ${b.scan.passed} haben die Sicherheitsfilter bestanden.</div>` : ""}
+  ${b.scan ? `<div class="info">Letzter Scan ${when(b.scan.t)}: ${b.scan.found} pump.fun-Coins gefunden, ${b.scan.passed} haben die ${esc(b.scan.filter || "Sicherheitsfilter")} bestanden.</div>` : ""}
   <div class="card"><div class="lbl">${esc(b.name)} · ${esc(b.market)} · ${esc(b.style)} · ${b.weight} % vom Konto${b.team && data.teams && data.teams[b.team] ? " · " + esc(data.teams[b.team].name) : ""}</div>
     <div class="big">${eur(b.equity)}</div><div class="pct ${cls(b.pnl_pct)}">${pc(b.pnl_pct)} (${eur(b.pnl)})</div>${chart(b.curve)}
     <div class="stats"><div><b>${s.trades}</b><span>Trades</span></div><div><b>${s.winrate == null ? "–" : s.winrate + " %"}</b><span>Treffer</span></div>
     <div><b>${s.avg_r == null ? "–" : (s.avg_r > 0 ? "+" : "") + s.avg_r}</b><span>Ø R</span></div><div><b>${s.max_drawdown_pct ? "-" + s.max_drawdown_pct : 0} %</b><span>Max. Rückg.</span></div></div></div>
+  ${checkView(b)}
   <h2>Lernen</h2><div class="card">
     <div class="lbl">Aktive Variante: <b class="act">${esc(L.active)}</b>${L.paused.length ? " · Pause: " + L.paused.map(p => typeof p === "string" ? esc(p) : `${esc(p.pair)} bis ${when(p.until)}`).join(", ") : ""}</div>
     <table><tr><th>Var.</th><th>Einstellung</th><th>Trades</th><th>Ø R</th></tr>

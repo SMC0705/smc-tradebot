@@ -19,7 +19,8 @@ def load_weights():
                 w = json.load(f).get("weights", {})
         except Exception:
             w = {}
-    w = {b: max(0.0, float(w.get(b, 0))) for b in BOTS} if w else {b: 1.0 for b in BOTS}
+    # Bots, die (noch) nicht in der Datei stehen, bekommen ihren Standard-Anteil aus bots.py
+    w = {b: max(0.0, float(w.get(b, BOTS[b].get("weight", 0)))) for b in BOTS}
     tot = sum(w.values())
     return {b: (v / tot * 100 if tot else 0.0) for b, v in w.items()}
 

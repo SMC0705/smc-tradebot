@@ -10,8 +10,30 @@ POOL_START_EUR = 8000.0                      # Spielgeld im Sammelkonto
 MIN_ORDER_EUR = 10.0                         # kleinere Käufe lässt Kraken nicht zu
 MAX_DRAWDOWN_STOP = 0.25                     # Not-Aus je Bot: −25 % vom besten Stand -> keine neuen Trades
 WARMUP_CANDLES = 500                         # Schatten-Varianten lernen beim Start aus so vielen alten Kerzen
-ENGINE_VERSION = "4.2"                       # ändert sich die Handelslogik, startet das Lernen neu
-MIN_RISK_FEE_MULT = 1.5                      # Stop muss mind. 1,5x so weit weg sein wie Kauf+Verkauf an Gebühren kosten
+ENGINE_VERSION = "4.4"                       # ändert sich die Handelslogik, startet das Lernen neu
+MIN_RISK_FEE_MULT = 1.5                      # Stop muss mind. 1,5x so weit weg sein wie Kauf + Verkauf kosten
+CHECKS_KEEP = 48                             # Prüfprotokoll: so viele Läufe merken (48 = 24 Std.)
+RUN_BUDGET_MIN = 11                          # GitHub bricht einen Lauf nach 15 Min. ab: nach 11 Min. werden übrige
+                                             # Bots übersprungen (holen alles im nächsten Lauf nach), damit gespeichert wird
+
+# --- Gebühren je Richtung (Kauf ODER Verkauf) ------------------------------------------
+# Quelle: kraken.com/features/fee-schedule (Stand Okt. 2026).
+# Maker = Limit-Order, die im Orderbuch wartet. Taker = sofort zum Marktpreis (auch jeder Stop-Loss).
+# Krypto-Stufen nach 30-Tage-Umsatz: 1 = ab 0 $ (0,40 / 0,80 %), 2 = ab 2.500 $ (0,30 / 0,60 %),
+# 3 = ab 10.000 $ (0,22 / 0,38 %), 4 = ab 25.000 $ (0,20 / 0,35 %). Aktive Bots erreichen Stufe 2 nach wenigen Tagen.
+KRAKEN_TIER = 2
+_CRYPTO_TIERS = {1: (0.0040, 0.0080), 2: (0.0030, 0.0060), 3: (0.0022, 0.0038), 4: (0.0020, 0.0035)}
+FEES = {
+    "crypto": {"maker": _CRYPTO_TIERS[KRAKEN_TIER][0], "taker": _CRYPTO_TIERS[KRAKEN_TIER][1]},
+    "xstocks": {"maker": 0.0, "taker": 0.0008},    # Aktien-Token (ab 05.10.2026; vorher 0,10 %)
+    "fx": {"maker": 0.0020, "taker": 0.0020},      # Devisen-Paare
+    "dex": {"maker": 0.01, "taker": 0.01},         # pump.fun auf Solana: Swap-Gebühr + Priority Fee (geschätzt)
+}
+LIMIT_RULES = {
+    "offset_r": 0.1,     # Limit-Kauf 10 % der Stop-Distanz unter dem Signalkurs
+    "valid": 2,          # Order gilt 2 Kerzen, danach wird sie gelöscht ...
+    "valid_daily": 1,    # ... bei Tageskerzen 1 Tag
+}
 
 # --- Lernen ---------------------------------------------------------------------------
 LEARN_RULES = {

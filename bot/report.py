@@ -29,7 +29,30 @@ def downsample(curve, n=200):
     return [curve[int(i * step)] for i in range(n)] + [curve[-1]]
 
 
-def bot_status(bot, st, weight, team, scores, unavailable):
+def checks(st, now):
+    """Prüfprotokoll fürs Handy: letzte Prüfung, Summen der letzten 24 Std., wichtigste Hinweise."""
+    runs = [c for c in st.get("checks", []) if now - c["t"] <= 24 * 3600]
+    keys = ("candles", "signals", "too_small", "own", "team", "orders", "unfilled", "bought", "sold")
+    last = st.get("checks", [])[-1] if st.get("checks") else None
+    return {"last_t": last["t"] if last else None, "pairs": last["pairs"] if last else 0, "runs": len(runs),
+            "day": {k: sum(c.get(k, 0) for c in runs) for k in keys},
+            "notes": list(reversed(st.get("check_notes", [])))[:12]}
+
+
+def execution(bot):
+    """Wie der Bot kauft und was es kostet (für die Anzeige), am Beispiel seines ersten Werts."""
+    if not bot["pairs"] or bot.get("source") == "pumpfun":
+        return None
+    classes = [A.fee_class(bot, p) for p in bot["pairs"]]
+    main = max(set(classes), key=classes.count)          # z. B. Krisen-Bot: meist Aktien-Token
+    pair, typ = bot["pairs"][classes.index(main)], A.order_type(bot)
+    maker, taker = A.fees(bot, pair)
+    return {"entry": typ, "maker": maker * 100, "taker": taker * 100,
+            "min_stop": round(A.min_stop(bot, pair, typ) * 100, 2)}
+
+
+def bot_status(bot, st, weight, team, scores, unavailable, now=None):
+    now = now or int(time.time())
     a = st["real"]
     eq = A.equity(a)
     names = st.get("names", {})
@@ -40,7 +63,8 @@ def bot_status(bot, st, weight, team, scores, unavailable):
         val = p["qty"] * a["marks"].get(p["pair"], p["entry"] * p["rate"])
         pos.append({"pair": disp(p["pair"]), "addr": p["pair"] if onchain else None, "entry": p["entry"],
                     "stop": p["stop"], "target": p["target"], "opened_t": p["opened_t"], "value": round(val, 2),
-                    "pnl_pct": round((val * (1 - bot["fee"]) / p["cost"] - 1) * 100, 2), "reason": p["reason"]})
+                    "pnl_pct": round((val * (1 - A.fees(bot, p["pair"])[1]) / p["cost"] - 1) * 100, 2),
+                    "reason": p["reason"]})
     return {
         "name": bot["name"], "style": bot["style"], "market": bot["market"], "team": team,
         "weight": round(weight, 1), "enabled": weight > 0, "equity": round(eq, 2), "net_in": round(a["net_in"], 2),
@@ -52,6 +76,9 @@ def bot_status(bot, st, weight, team, scores, unavailable):
         "curve": downsample(a["equity_curve"]),
         "unavailable": [display(p) for p in unavailable],
         "scan": st.get("last_scan"),
+        "checks": checks(st, now), "exec": execution(bot),
+        "orders": [{"pair": disp(pp), "type": o["type"], "price": o.get("price"), "until": o.get("until"),
+                    "reason": o["sig"].get("reason")} for pp, o in a.get("pending", {}).items() if "sig" in o],
         "learning": {
             "active": LABELS[st["active"]],
             "variants": [{"label": LABELS[i], "params": bot["variants"][i], "trades": s[1],

@@ -21,6 +21,7 @@ class Team:
     def __init__(self, tstate, states, teams_map, pool, now, errors, news=None):
         self.ts, self.states, self.map, self.pool = tstate, states, teams_map, pool
         self.now, self.errors, self.news, self.regimes = now, errors, news, {}
+        self.last_reason = None
         for tid in TEAMS:
             tstate["teams"].setdefault(tid, {"pause_until": 0, "guard_since": 0, "dd_since": 0, "log": [], "regimes": {}})
         tstate["seen"] = {k: v for k, v in tstate["seen"].items() if now - v < 6 * 3600}
@@ -68,11 +69,16 @@ class Team:
         risk.guard(self)
 
     # --- Entscheidung vor jedem Kauf --------------------------------------------
+    def gate_for(self, bid):
+        """Entscheidungs-Funktion für einen Bot (merkt sich den Grund einer Ablehnung fürs Prüfprotokoll)."""
+        return _Gate(self, bid)
+
     def gate(self, bid, pair, sig, t_entry):
         bot, tid = BOTS[bid], self.map[bid]
         name, disp = bot["name"], self.disp(bid, pair)
 
         def block(reason, key):
+            self.last_reason = reason
             self.log(tid, f"{name}: {disp} übersprungen – {reason}", key=key)
             return 0.0
 
@@ -140,3 +146,14 @@ class Team:
                 "log": list(reversed(T["log"][-15:])),
             }
         return out
+
+
+class _Gate:
+    def __init__(self, team, bid):
+        self.team, self.bid, self.reason = team, bid, None
+
+    def __call__(self, pair, sig, t):
+        self.team.last_reason = None
+        m = self.team.gate(self.bid, pair, sig, t)
+        self.reason = self.team.last_reason
+        return m

@@ -3,10 +3,11 @@ Jede Strategie-Datei hat eine Funktion signal(kerzen, parameter) -> Kaufsignal o
 Ein Signal ist ein dict: {"stop", "target", "reason"} und optional
   "trail_n" (Stop am Tief der letzten n Kerzen nachziehen), "max_hold" (max. Kerzen halten),
   "eod" (zum Tagesende schließen), "exit" + "exit_p" (eigene Verkaufsregel aus EXITS).
-Strategien entscheiden NUR über Signale – Geld, Risiko und Team-Regeln liegen woanders.
-Gekauft wird immer erst zum Eröffnungskurs der nächsten Kerze (kein Blick in die Zukunft).
+Strategien entscheiden NUR über Signale – Geld, Gebühren, Orders, Risiko und Team-Regeln liegen woanders.
+Gekauft wird frühestens in der nächsten Kerze: per Limit-Order etwas unter dem Signalkurs oder zum
+Eröffnungskurs (Market) – nie mit Blick in die Zukunft (siehe trading/account.py).
 """
-from . import day, meme, minervini, momentum, patterns, rsi2, scalp, smc, swing, trend
+from . import day, meme, minervini, momentum, patterns, rsi2, scalp, smc, stockday, swing, trend
 
 WINDOW = 260  # so viele Kerzen bekommt jede Strategie
 
@@ -20,6 +21,7 @@ SIGNALS = {
     "rsi2": rsi2.signal,
     "minervini": minervini.signal,
     "momentum": momentum.signal,
+    "stockday": stockday.signal,
     "patterns": patterns.signal,   # Muster-Bibliothek (siehe patterns.py)
 }
 

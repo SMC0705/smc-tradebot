@@ -51,6 +51,12 @@ TOKENS = [f"Mint{i:03d}xxxxxxxxxxxxxxxxxxpump" for i in range(40)]
 
 
 def _pools(_path=""):
+    if "pump-fun" in _path or "new_pools" in _path:   # junge Coins, die noch auf der Bonding-Curve handeln
+        return [{"pool": "Curve" + m[:7], "mint": m, "symbol": f"NEU{i}", "dex": "pump-fun", "price": 0.00001 * (i + 1),
+                 "liq": _rnd.uniform(4e3, 30e3), "vol_h1": _rnd.uniform(4e3, 60e3), "vol_h6": _rnd.uniform(10e3, 120e3),
+                 "ch_m5": _rnd.uniform(-5, 15), "ch_h1": _rnd.uniform(-20, 200), "buys": _rnd.randint(30, 300),
+                 "sells": _rnd.randint(20, 250), "created": NOW[0] - _rnd.randint(900, 4 * 3600),
+                 "mcap": _rnd.uniform(1e4, 9e4)} for i, m in enumerate(TOKENS[25:40])]
     return [{"pool": "Pool" + m[:7], "mint": m, "symbol": f"MEME{i}", "dex": "pumpswap", "price": 0.001 * (i + 1),
              "liq": _rnd.uniform(10e3, 300e3), "vol_h1": _rnd.uniform(5e3, 200e3), "vol_h6": _rnd.uniform(50e3, 600e3),
              "ch_m5": _rnd.uniform(-5, 8), "ch_h1": _rnd.uniform(-20, 60), "buys": _rnd.randint(50, 400),
