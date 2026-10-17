@@ -56,6 +56,12 @@ def get_candles(pair, interval, aclass=None):
     return _cache[key]
 
 
+def peek(pair, interval):
+    """Kerzen nur aus dem Zwischenspeicher dieses Laufs (kein neuer Abruf) – oder None."""
+    v = _cache.get((pair, interval))
+    return None if v is None or isinstance(v, Exception) else v
+
+
 def eur_rates(errors):
     """EUR je Einheit der Kurswährung (USD, JPY, CHF, CAD) – zum Umrechnen von US-Aktien und Forex."""
     rates = {"EUR": 1.0}

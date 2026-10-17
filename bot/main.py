@@ -13,10 +13,11 @@ import time
 
 from . import report, settings as S, storage
 from .bots import BOTS
-from .brain import news_analyst, portfolio
+from .brain import news_analyst, portfolio, ranking
 from .brain.team import Team, new_state as new_team_state
-from .data import kraken, news
+from .data import kraken, news, revolutx
 from .trading import account as A
+from .trading import focus
 from .trading import pool as P
 from .trading import runner
 
@@ -34,6 +35,8 @@ def run():
 
     # 2) Daten
     rates = kraken.eur_rates(errors)
+    if S.CRYPTO_VENUE == "revolutx":
+        revolutx.load(errors)          # Geld/Brief aller Coins bei Revolut X (ein Abruf)
     situation = news_analyst.assess(news.collect(errors, nstate.setdefault("cache", {})), now)
     news_analyst.track(nstate, situation, now)
 
@@ -43,16 +46,25 @@ def run():
     team.guard()
 
     # 4) Bots
-    scores, unavailable, skipped = {}, {}, []
+    scores, unavailable, skipped, cands = {}, {}, [], []
     for b, bot in BOTS.items():
         unavailable[b] = []
+        if bot.get("source") == "focus":
+            continue                                      # kommt zum Schluss: braucht die Signale aller Bots
         if time.time() - now > S.RUN_BUDGET_MIN * 60:   # Zeitlimit: Rest im nächsten Lauf
             skipped.append(bot["name"])
             scores[b] = runner.scores_only(bot, states[b])
             continue
-        scores[b] = runner.run(b, bot, states[b], rates, weights[b] > 0, errors, unavailable[b], team.gate_for(b))
+        scores[b] = runner.run(b, bot, states[b], rates, weights[b] > 0, errors, unavailable[b], team.gate_for(b),
+                               candidates=cands)
     if skipped:
         errors.append(f"Zeitlimit erreicht – im nächsten Lauf dran: {', '.join(skipped)}")
+    # 4b) Fokus-Bot: alle frischen Signale bewerten (Rangliste) und nur das beste handeln
+    ranked = ranking.rank(cands, team, states, now)
+    for b, bot in BOTS.items():
+        if bot.get("source") == "focus":
+            scores[b] = focus.run(bot, states[b], ranked, rates, weights[b] > 0, now)
+    markets = ranking.market_map(ranked)
 
     # 5) Sammelkonto, Speichern, Übersicht
     for b, amount in P.rebalance(pool, {b: s["real"] for b, s in states.items()}, weights):
@@ -73,7 +85,7 @@ def run():
     storage.write_status(report.build(
         now, errors, pool, total, weights, portfolio.suggestion(states, weights), team.status(),
         {b: report.bot_status(BOTS[b], states[b], weights[b], teams_map[b], scores[b], unavailable[b]) for b in BOTS},
-        report.news_status(situation, nstate)))
+        report.news_status(situation, nstate), markets, report.council_status(team.ts, states)))
     print(f"Sammelkonto: {total:.2f} EUR | Nachrichtenlage: {situation['level_text'] if situation else '–'} | "
           f"Hinweise: {len(errors)}")
 

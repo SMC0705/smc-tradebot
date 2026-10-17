@@ -3,10 +3,12 @@ keine Handels-Entscheidungen."""
 import time
 
 from . import settings as S
+from .bots import BOTS
 from .brain import learning as L
 from .strategies.patterns import LABELS as PATTERN_LABELS
 from .markets import display
 from .trading import account as A
+from .trading import venues as V
 from .trading.runner import LABELS
 
 
@@ -40,15 +42,19 @@ def checks(st, now):
 
 
 def execution(bot):
-    """Wie der Bot kauft und was es kostet (für die Anzeige), am Beispiel seines ersten Werts."""
-    if not bot["pairs"] or bot.get("source") == "pumpfun":
+    """Wie der Bot kauft, an welcher Börse und was es kostet (für die Anzeige)."""
+    if not bot["pairs"] or bot.get("source") in ("pumpfun", "focus"):
         return None
-    classes = [A.fee_class(bot, p) for p in bot["pairs"]]
-    main = max(set(classes), key=classes.count)          # z. B. Krisen-Bot: meist Aktien-Token
-    pair, typ = bot["pairs"][classes.index(main)], A.order_type(bot)
-    maker, taker = A.fees(bot, pair)
-    return {"entry": typ, "maker": maker * 100, "taker": taker * 100,
-            "min_stop": round(A.min_stop(bot, pair, typ) * 100, 2)}
+    typ, groups = A.order_type(bot), {}
+    for p in bot["pairs"]:
+        v = V.venue(bot, p)
+        g = groups.setdefault(v["name"], {"venue": V.label(v["name"]), "n": 0, "maker": v["maker"] * 100,
+                                          "taker": v["taker"] * 100, "stops": []})
+        g["n"] += 1
+        g["stops"].append(A.min_stop(bot, p, typ) * 100)
+    for g in groups.values():   # typischer (mittlerer) Mindest-Stop
+        g["min_stop"] = round(sorted(g.pop("stops"))[g["n"] // 2], 2)
+    return {"entry": typ, "venues": sorted(groups.values(), key=lambda g: -g["n"])}
 
 
 def bot_status(bot, st, weight, team, scores, unavailable, now=None):
@@ -61,21 +67,28 @@ def bot_status(bot, st, weight, team, scores, unavailable, now=None):
     pos = []
     for p in a["positions"].values():
         val = p["qty"] * a["marks"].get(p["pair"], p["entry"] * p["rate"])
+        price, risk_px = val / p["qty"] / p["rate"], p["entry"] - p["init_stop"]
+        r_now = (price - p["entry"]) / risk_px if risk_px > 0 else 0.0
+        r_tgt = min((p["target"] - p["entry"]) / risk_px, 3.0) if risk_px > 0 else 2.0
         pos.append({"pair": disp(p["pair"]), "addr": p["pair"] if onchain else None, "entry": p["entry"],
                     "stop": p["stop"], "target": p["target"], "opened_t": p["opened_t"], "value": round(val, 2),
-                    "pnl_pct": round((val * (1 - A.fees(bot, p["pair"])[1]) / p["cost"] - 1) * 100, 2),
-                    "reason": p["reason"]})
+                    "pnl_pct": round((val * (1 - p.get("fee_t", A.fees(bot, p["pair"])[1])) / p["cost"] - 1) * 100, 2),
+                    "reason": p["reason"], "venue": V.label(p["venue"]) if p.get("venue") else None,
+                    "price": price, "r_now": round(r_now, 2),     # Fortschritt: 0 = am Stop, 1 = am Ziel
+                    "progress": round(max(0.0, min(1.0, (r_now + 1) / (r_tgt + 1))), 3)})
     return {
         "name": bot["name"], "style": bot["style"], "market": bot["market"], "team": team,
         "weight": round(weight, 1), "enabled": weight > 0, "equity": round(eq, 2), "net_in": round(a["net_in"], 2),
         "pnl": round(eq - a["net_in"], 2),
         "pnl_pct": round((eq / a["net_in"] - 1) * 100, 2) if a["net_in"] > 1 else 0.0,
         "cash": round(a["cash"], 2), "halted": a["halted"], "positions": pos,
-        "trades": [dict(t, pair=disp(t["pair"])) for t in reversed(a["trades"][-30:])],
+        "trades": [dict(t, pair=disp(t["pair"]), venue=V.label(t["venue"]) if t.get("venue") else None)
+                   for t in reversed(a["trades"][-30:])],
         "stats": stats(a["trades"], a["equity_curve"], max(a["net_in"], a.get("cap", 0.0))),
         "curve": downsample(a["equity_curve"]),
         "unavailable": [display(p) for p in unavailable],
         "scan": st.get("last_scan"),
+        "board": st.get("board") if bot.get("source") == "focus" else None,
         "checks": checks(st, now), "exec": execution(bot),
         "orders": [{"pair": disp(pp), "type": o["type"], "price": o.get("price"), "until": o.get("until"),
                     "reason": o["sig"].get("reason")} for pp, o in a.get("pending", {}).items() if "sig" in o],
@@ -105,7 +118,28 @@ def news_status(sit, nstate):
     }
 
 
-def build(now, errors, pool, total, weights, suggestion, teams, bots, news):
+COUNCIL = {"analyst": "Analyst", "news": "Nachrichten", "trend": "Großer Trend", "muster": "Muster",
+           "kollegen": "Kollegen", "risiko": "Risiko-Manager"}
+
+
+def council_status(tstate, states):
+    """Der Rat: letzte Abstimmungen und wer mit seiner Stimme bisher richtig lag
+    (Bedenken + Verlust oder Ja + Gewinn = richtig). Gezählt werden echte, abgeschlossene Trades."""
+    recent = sorted(tstate.get("council", []), key=lambda c: -c["t"])[:12]
+    recent = [dict(c, bot=BOTS[c["bot"]]["name"] if c["bot"] in BOTS else c["bot"]) for c in recent]
+    score = {k: [0, 0] for k in COUNCIL}
+    for st in states.values():
+        for t in st["real"]["trades"]:
+            for k, f in (t.get("votes") or {}).items():
+                if k in score:
+                    score[k][0] += 1
+                    score[k][1] += (f < 1) != (t["r"] > 0)
+    return {"members": COUNCIL, "recent": recent,
+            "accuracy": [{"id": k, "name": COUNCIL[k], "votes": n, "right": r, "pct": round(r / n * 100) if n else None}
+                         for k, (n, r) in score.items()]}
+
+
+def build(now, errors, pool, total, weights, suggestion, teams, bots, news, markets=None, council=None):
     return {
         "mode": S.MODE, "updated_at": now, "currency": "EUR", "errors": errors,
         "pool": {"equity": round(total, 2), "start": pool["start"],
@@ -113,5 +147,5 @@ def build(now, errors, pool, total, weights, suggestion, teams, bots, news):
                  "unallocated": round(pool["unallocated"], 2), "weights": weights,
                  "rebalancing": pool["pending_runs"] > 0, "curve": downsample(pool["curve"]),
                  "suggestion": suggestion},
-        "teams": teams, "bots": bots, "news": news,
+        "teams": teams, "bots": bots, "news": news, "markets": markets or [], "council": council,
     }

@@ -62,6 +62,24 @@ ol{margin:8px 0 0 18px;font-size:13px;color:var(--mut)}ol li{margin:3px 0}
 .team-h .sub{margin-top:4px}.chip.up{color:var(--up);background:#22c55e1f}.chip.down{color:var(--down);background:#ef44441f}
 select{background:var(--bg);color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:3px 6px;font:inherit;font-size:12px;margin-left:6px}
 .tsum{color:var(--mut);font-size:12px;margin:10px 0 0;text-transform:uppercase;letter-spacing:.4px;font-weight:600}
+.seg{display:flex;gap:6px;margin-bottom:12px;background:var(--card);padding:4px;border-radius:12px}
+.seg button{flex:1;border:0;background:none;color:var(--mut);font:inherit;font-size:13px;font-weight:600;padding:8px 4px;border-radius:9px}
+.seg button.on{background:var(--line);color:var(--txt)}
+.vbox{position:relative}.vsvg{width:100%;display:block}.vcan{width:100%;display:block}
+.vtip{position:absolute;display:none;pointer-events:none;background:#22262f;border:1px solid #333a47;border-radius:10px;padding:7px 9px;font-size:12px;max-width:240px;z-index:2}
+.vtip b{display:block;font-size:13px}.vtip span{display:block;color:var(--mut)}
+.vleg{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:8px;font-size:12px;color:var(--mut);align-items:center}
+.vleg .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;vertical-align:-1px;background:#6da7ec}
+.vleg .dot.big{width:12px;height:12px}.vleg .dot.ring{background:none;border:2px solid var(--txt)}
+.vleg .scale{display:inline-flex;gap:2px}.vleg .scale i{width:14px;height:9px;border-radius:2px;display:inline-block}
+.vbar{display:grid;grid-template-columns:130px 1fr 42px 26px;gap:8px;align-items:center;padding:7px 0;font-size:13px}
+.vbar small{color:var(--mut);text-align:right}.vbar b{text-align:right}
+.trk{height:8px;border-radius:4px;background:#184f9566;overflow:hidden}.trk div{height:100%;border-radius:4px;background:#6da7ec}
+.trk.sm{height:6px;margin-top:5px}
+.memb{animation:pop .5s ease-out both;animation-delay:var(--d)}
+@keyframes pop{from{opacity:0;transform:scale(.6)}to{opacity:1}}
+.vglow{animation:glow 1.6s ease-in-out infinite alternate}@keyframes glow{from{opacity:.55}to{opacity:1}}
+@media (prefers-reduced-motion: reduce){.memb,.vglow{animation:none}}
 #toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);background:#22262f;color:var(--txt);padding:10px 16px;border-radius:10px;font-size:14px;display:none;max-width:90%}
 </style>
 </head>
@@ -70,9 +88,10 @@ select{background:var(--bg);color:var(--txt);border:1px solid var(--line);border
 <div id="warn"></div>
 <main id="view"></main>
 <div class="foot" id="upd"></div>
-<nav><div><button data-tab="bots" class="on">Bots</button><button data-tab="news">News</button><button data-tab="konto">Konto</button></div></nav>
+<nav><div><button data-tab="bots" class="on">Bots</button><button data-tab="live">Live</button><button data-tab="news">News</button><button data-tab="konto">Konto</button></div></nav>
 <div id="toast"></div>
 
+<script src="visuals.js"></script>
 <script>
 const eur = v => (v ?? 0).toLocaleString("de-DE", {style: "currency", currency: "EUR"});
 const pc = v => (v > 0 ? "+" : "") + (v ?? 0).toLocaleString("de-DE", {maximumFractionDigits: 2}) + " %";
@@ -112,14 +131,14 @@ function chart(curve) {
 
 function tradeRows(list) {
   return list.length ? list.map(t => `
-    <div class="row"><div class="l"><b>${esc(t.pair)} · ${esc(t.result)}</b><span>${t.bot ? esc(t.bot) + " · " : ""}${when(t.closed_t)} · ${px(t.entry)} → ${px(t.exit)}</span></div>
+    <div class="row"><div class="l"><b>${esc(t.pair)} · ${esc(t.result)}</b><span>${t.bot ? esc(t.bot) + " · " : ""}${t.venue ? esc(t.venue) + " · " : ""}${when(t.closed_t)} · ${px(t.entry)} → ${px(t.exit)}</span></div>
     <div class="r"><b class="${cls(t.pnl)}">${eur(t.pnl)}</b><span>${pc(t.pnl_pct)}</span></div></div>`).join("")
     : '<div class="empty">Noch keine abgeschlossenen Trades</div>';
 }
 
 function posRows(list) {
   return list.length ? list.map(x => `
-    <div class="row"><div class="l"><b>${x.addr ? `<a href="https://dexscreener.com/solana/${esc(x.addr)}" target="_blank" rel="noopener" style="color:inherit">${esc(x.pair)} ↗</a>` : esc(x.pair)}</b><span>${x.bot ? esc(x.bot) + " · " : ""}seit ${when(x.opened_t)}</span></div>
+    <div class="row"><div class="l"><b>${x.addr ? `<a href="https://dexscreener.com/solana/${esc(x.addr)}" target="_blank" rel="noopener" style="color:inherit">${esc(x.pair)} ↗</a>` : esc(x.pair)}</b><span>${x.bot ? esc(x.bot) + " · " : ""}${x.venue ? esc(x.venue) + " · " : ""}seit ${when(x.opened_t)}</span></div>
     <div class="r"><b class="${cls(x.pnl_pct)}">${pc(x.pnl_pct)}</b><span>${eur(x.value)}</span></div></div>`).join("")
     : '<div class="empty">Keine offenen Trades</div>';
 }
@@ -165,7 +184,8 @@ function checkView(b) {
     <div class="stats"><div><b>${d.signals}</b><span>Signale</span></div><div><b>${d.too_small}</b><span>zu klein</span></div>
       <div><b>${d.team + d.own}</b><span>abgelehnt</span></div><div><b>${d.bought}</b><span>gekauft</span></div></div>
     ${d.unfilled ? `<div class="lbl" style="margin-top:8px">${d.unfilled} Limit-Orders nicht gefüllt (Kurs kam nicht zurück)</div>` : ""}
-    ${e ? `<div class="lbl" style="margin-top:8px">${e.entry === "limit" ? `Kauft per Limit-Order (Gebühr ${pct2(e.maker)}, sofort ${pct2(e.taker)})` : `Kauft sofort zum Marktpreis (Gebühr ${pct2(e.taker)})`}. Gekauft wird nur, wenn der Stop mind. ${pct2(e.min_stop)} entfernt ist – sonst fressen die Gebühren den Gewinn.</div>` : ""}
+    ${e && e.venues ? `<div class="lbl" style="margin-top:8px">${e.entry === "limit" ? "Kauft per Limit-Order (wartet im Orderbuch)." : "Kauft sofort zum Marktpreis."} Gekauft wird nur, wenn der Stop weit genug weg ist – sonst fressen die Gebühren den Gewinn.</div>
+      ${e.venues.map(v => `<div class="row"><div class="l"><b>${esc(v.venue)}</b><span>${v.n} Werte · Gebühr ${e.entry === "limit" ? pct2(v.maker) + " Limit / " : ""}${pct2(v.taker)} sofort</span></div><div class="r"><b>Stop ≥ ${pct2(v.min_stop)}</b></div></div>`).join("")}` : ""}
     ${b.orders && b.orders.length ? `<div class="lbl" style="margin-top:12px">Wartende Kauf-Orders</div>${orderRows(b.orders)}` : ""}
     ${c.notes.length ? c.notes.map(([t, m]) => `<div class="log">${esc(m)}<span>${when(t)}</span></div>`).join("") : '<div class="log mut">In den letzten Läufen gab es kein Kaufsignal.</div>'}
   </div>`;
@@ -336,8 +356,10 @@ function viewKonto() {
 function render() {
   if (!data) { $("view").innerHTML = '<div class="warn">Noch keine Daten. Läuft der Bot schon?</div>'; return; }
   document.querySelectorAll("nav button").forEach(b => b.classList.toggle("on", b.dataset.tab === tab));
-  $("view").innerHTML = tab === "konto" ? viewKonto() : tab === "news" ? viewNews() : detail && data.bots[detail] ? viewDetail(detail)
-    : teamView && data.teams && data.teams[teamView] ? viewTeam(teamView) : viewBots();
+  LIVE.unmount();
+  $("view").innerHTML = tab === "konto" ? viewKonto() : tab === "news" ? viewNews() : tab === "live" ? LIVE.view(data)
+    : detail && data.bots[detail] ? viewDetail(detail) : teamView && data.teams && data.teams[teamView] ? viewTeam(teamView) : viewBots();
+  if (tab === "live") LIVE.mount(data);
   const age = (Date.now() / 1000 - data.updated_at) / 60, w = [];
   if (age > 120) w.push(`Letzte Aktualisierung vor ${Math.round(age / 60)} Std. – Bot prüfen.`);
   const halted = Object.values(data.bots).filter(b => b.halted).map(b => b.name);
@@ -373,11 +395,12 @@ async function saveAllocation() {
 }
 
 document.addEventListener("click", e => {
-  const t = e.target.closest("[data-tab],[data-bot],[data-team],[data-back],[data-equal],[data-save],[data-tok],[data-sugg],#reload");
+  const t = e.target.closest("[data-tab],[data-sub],[data-bot],[data-team],[data-back],[data-equal],[data-save],[data-tok],[data-sugg],#reload");
   if (!t) return;
   if (t.id === "reload") { e.preventDefault(); load(); return; }
   if (t.dataset.tab) { tab = t.dataset.tab; detail = null; teamView = null; draft = null; draftTeams = null; window.scrollTo(0, 0); }
-  else if (t.dataset.bot) { detail = t.dataset.bot; window.scrollTo(0, 0); }
+  else if (t.dataset.sub) { LIVE.setSub(t.dataset.sub); }
+  else if (t.dataset.bot) { detail = t.dataset.bot; if (tab === "live") tab = "bots"; window.scrollTo(0, 0); }
   else if (t.dataset.team) { teamView = t.dataset.team; window.scrollTo(0, 0); }
   else if (t.hasAttribute("data-back")) { if (detail) detail = null; else teamView = null; }
   else if (t.hasAttribute("data-sugg")) { draft = {...data.pool.suggestion.weights}; toast("Vorschlag übernommen – jetzt speichern"); }

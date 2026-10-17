@@ -4,17 +4,18 @@
     "day": 3,
     "smc": 7,
     "trend": 9,
-    "trend2": 9,
-    "breakout": 8,
-    "swing": 9,
+    "trend2": 8,
+    "breakout": 7,
+    "swing": 8,
     "meme": 4,
     "pump": 5,
-    "pump2": 5,
-    "stocks": 10,
-    "stockday": 10,
+    "pump2": 4,
+    "stocks": 9,
+    "stockday": 9,
     "minervini": 6,
-    "rsi2": 6,
+    "rsi2": 5,
     "fx": 3,
-    "krise": 4
+    "krise": 4,
+    "focus": 7
   }
 }

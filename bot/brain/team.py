@@ -21,7 +21,7 @@ class Team:
     def __init__(self, tstate, states, teams_map, pool, now, errors, news=None):
         self.ts, self.states, self.map, self.pool = tstate, states, teams_map, pool
         self.now, self.errors, self.news, self.regimes = now, errors, news, {}
-        self.last_reason = None
+        self.last_reason, self.last_votes = None, {}
         for tid in TEAMS:
             tstate["teams"].setdefault(tid, {"pause_until": 0, "guard_since": 0, "dd_since": 0, "log": [], "regimes": {}})
         tstate["seen"] = {k: v for k, v in tstate["seen"].items() if now - v < 6 * 3600}
@@ -74,23 +74,33 @@ class Team:
         return _Gate(self, bid)
 
     def gate(self, bid, pair, sig, t_entry):
+        """Der „Rat“: jedes Mitglied stimmt ab (Faktor 0 = Nein, < 1 = Bedenken, 1 = Ja, > 1 = klares Ja).
+        Die Stimmen landen in self.last_votes und im Rats-Protokoll (für die App)."""
         bot, tid = BOTS[bid], self.map[bid]
         name, disp = bot["name"], self.disp(bid, pair)
+        votes = self.last_votes = {}
 
-        def block(reason, key):
+        def block(reason, key, member):
+            votes[member] = 0.0
             self.last_reason = reason
             self.log(tid, f"{name}: {disp} übersprungen – {reason}", key=key)
+            self._council(bid, disp, t_entry, votes, 0.0, reason)
             return 0.0
 
         if self.now < self.ts["teams"][tid]["pause_until"]:
-            return block("Team pausiert", f"p{bid}{pair}")
+            return block("Team pausiert", f"p{bid}{pair}", "risiko")
         m, why_news, nkey = news_analyst.factor(self.news, bot, pair, t_entry)
         if m <= 0:
-            return block(why_news, f"n{bid}{pair}{nkey}")
+            return block(why_news, f"n{bid}{pair}{nkey}", "news")
+        votes["news"] = m
         why = [why_news] if why_news else []
-        msg = risk.colleague_stopped(self, bid, pair, t_entry) or risk.exposure_block(self, bid, pair)
+        msg = risk.colleague_stopped(self, bid, pair, t_entry)
         if msg:
-            return block(msg, f"r{bid}{pair}")
+            return block(msg, f"r{bid}{pair}", "kollegen")
+        msg = risk.exposure_block(self, bid, pair)
+        if msg:
+            return block(msg, f"r{bid}{pair}", "risiko")
+        votes["risiko"] = 1.0
         r = self.regimes.get(bot["regime_src"]) if bot["regime_src"] else None
         if r:
             f = bot["regime_rules"].get(r["label"], 1.0)
@@ -98,34 +108,50 @@ class Team:
             if r["vol_high"] and calm_market:
                 f *= 0.75
             if f <= 0:
-                return block(f"Marktlage „{r['label']}“ passt nicht zur Strategie", f"g{bid}{pair}")
+                return block(f"Marktlage „{r['label']}“ passt nicht zur Strategie", f"g{bid}{pair}", "analyst")
             if f != 1:
                 why.append(f"Markt {r['label']}{' + hohe Schwankung' if r['vol_high'] and calm_market else ''} x{f:g}")
             m *= f
+            votes["analyst"] = f
         LR = S.LEARN_RULES
         if sig.get("pattern"):
             why.append(f"Muster-Trade „{PATTERN_LABELS[sig['pattern']]}“ (halbes Risiko)")
         warn = sig.get("warn") or []
+        votes["muster"] = 1.0
         if warn:
             m *= LR["pattern_warn"]
+            votes["muster"] = LR["pattern_warn"]
             why.append(f"Warnmuster {PATTERN_LABELS[warn[0]]} x{LR['pattern_warn']:g}")
         conf = [p for p in (sig.get("confirm") or []) if p in learning.learned_patterns(self.states[bid])]
         if conf and not sig.get("pattern"):
             m *= LR["pattern_confirm"]
+            votes["muster"] *= LR["pattern_confirm"]
             why.append(f"bestätigt durch {PATTERN_LABELS[conf[0]]} x{LR['pattern_confirm']:g}")
+        votes["trend"] = 1.0
         if analyst.htf_against(bot, pair, t_entry):
             m *= R["htf_against"]
+            votes["trend"] = R["htf_against"]
             why.append(f"größerer Trend dagegen x{R['htf_against']:g}")
+        votes["kollegen"] = 1.0
         for b in self.members(tid):
             p = self.real(b)["positions"].get(pair) if b != bid else None
             if p and self.real(b)["marks"].get(pair, 0) > p["entry"] * p["rate"]:
                 m *= R["consensus_boost"]
+                votes["kollegen"] = R["consensus_boost"]
                 why.append(f"{BOTS[b]['name']} liegt hier im Plus x{R['consensus_boost']:g}")
                 break
         m = min(m, R["max_factor"])
         if why:
             self.log(tid, f"{name}: Kauf {disp} mit Risiko x{m:.2f} ({', '.join(why)})", key=f"m{bid}{pair}{t_entry}")
+        self._council(bid, disp, t_entry, votes, m, None)
         return m
+
+    def _council(self, bid, disp, t, votes, m, reason):
+        """Rats-Protokoll für die App: wer hat wie abgestimmt?"""
+        c = self.ts.setdefault("council", [])
+        c.append({"t": t, "bot": bid, "pair": disp, "votes": {k: round(v, 2) for k, v in votes.items()},
+                  "m": round(m, 2), "reason": reason})
+        del c[:-40]
 
     # --- Übersicht für die App ---------------------------------------------------
     def status(self):
@@ -155,5 +181,5 @@ class _Gate:
     def __call__(self, pair, sig, t):
         self.team.last_reason = None
         m = self.team.gate(self.bid, pair, sig, t)
-        self.reason = self.team.last_reason
+        self.reason, self.votes = self.team.last_reason, dict(self.team.last_votes)
         return m

@@ -1,11 +1,12 @@
 # SMC Tradebot – Demo-Phase
 
-Vollautomatische Trading-Bots für **Kraken** (Krypto, Aktien als xStocks, Devisen, Gold) und **pump.fun** (Solana).
+Vollautomatische Trading-Bots für **Revolut X** (Krypto), **Kraken** (Aktien als xStocks, Devisen, Gold, Krypto mit
+dünnem Handel bei Revolut X) und **pump.fun** (Solana).
 Sie handeln mit **Spielgeld** (8.000 € im Sammelkonto) und echten Live-Kursen. Gestartet werden sie alle 30 Minuten
 kostenlos über **GitHub Actions**. Die Handy-App läuft über **GitHub Pages**.
 Wie der Code aufgebaut ist und wo was liegt, steht in **[ARCHITEKTUR.md](ARCHITEKTUR.md)**.
 
-## Die Bots (16) in 4 Teams
+## Die Bots (17) in 5 Teams
 
 | Team | Bot | Takt | Idee (Vorbild) |
 |---|---|---|---|
@@ -25,20 +26,26 @@ Wie der Code aufgebaut ist und wo was liegt, steht in **[ARCHITEKTUR.md](ARCHITE
 | Aktien & Devisen | Rücksetzer | 1 Tag | RSI(2) unter 10 im Aufwärtstrend kaufen, Verkauf über 5-Tage-Linie (Larry Connors) |
 | Aktien & Devisen | Forex | 4 Std. | EUR/USD, GBP/USD, USD/JPY …: Trendfolge |
 | Makro & Krisen | Krisen-Bot | 1 Std. | Gold (PAXG), Öl-/Energie- und Rüstungswerte – nur bei passenden Nachrichten **und** steigendem Kurs |
+| Fokus (Top-1) | Fokus | – | Sieht die frischen Kaufsignale **aller** Bots, bewertet sie mit einer Note von 0 bis 1 und handelt nur das beste: 1 Position, 1 % Risiko, Tagesverlust-Limit 3 % |
 
 Für alle gilt: nur Kauf (Long), **kein Hebel**, immer mit Stop-Loss, Gebühren und Kursabschlag eingerechnet,
 Not-Aus bei −25 %, nach einem Verkauf 3 Kerzen Pause. Werte, die Kraken nicht anbietet, werden übersprungen und in der App angezeigt.
 
-**Gebühren wie bei Kraken** (Stand Okt. 2026, je Kauf bzw. Verkauf):
+**Börsen und Gebühren** (Stand Okt. 2026, je Kauf bzw. Verkauf):
 
 | Markt | Limit-Order (wartet im Orderbuch) | sofort zum Marktpreis | Stop muss mind. so weit weg sein |
 |---|---|---|---|
-| Krypto (Stufe 2, ab 2.500 $ Monatsumsatz) | 0,30 % | 0,60 % | 1,5 % (Limit) bzw. 2,1 % (Market) |
-| Aktien-Token (xStocks) | 0 % | 0,08 % | 0,27 % bzw. 0,54 % |
-| Devisen | 0,20 % | 0,20 % | 0,66 % |
+| Krypto bei **Revolut X** (MiCA-Lizenz, wenn Geld-Brief-Spanne ≤ 0,3 %) | 0 % | 0,09 % | ca. 0,2 % |
+| Krypto bei Kraken (Coins mit zu großer Spanne bei Revolut X; Stufe 2) | 0,30 % | 0,60 % | 1,5 % (Limit) bzw. 2,1 % (Market) |
+| Aktien-Token (xStocks, Kraken) | 0 % | 0,08 % | 0,27 % bzw. 0,54 % |
+| Devisen (Kraken) | 0,20 % | 0,20 % | 0,66 % |
 | pump.fun (Solana) | – | ca. 1 % | (eigene Regeln) |
 
-Ganz neue Konten zahlen bei Krypto zuerst 0,40 / 0,80 % (Stufe 1). Einstellbar in `bot/settings.py` (`KRAKEN_TIER`).
+Revolut X ist für Krypto die günstigste regulierte Börse in Deutschland (Binance darf seit 1. Juli 2026 keine
+EU-Spot-Orders mehr annehmen, Bitvavo kostet 0,15 / 0,25 %). Viele kleinere Coins werden dort aber dünn gehandelt –
+pro Lauf holt der Bot deshalb einmal Geld/Brief aller Coins und handelt jeden Coin dort, wo es insgesamt billiger ist.
+Jede Position merkt sich ihre Börse. Kurse für die Demo kommen weiter von Kraken (gleiche Marktpreise).
+Einstellbar in `bot/settings.py` (`CRYPTO_VENUE`, `MAX_SPREAD`, `KRAKEN_TIER`).
 **Gekauft wird meist per Limit-Order** etwas unter dem Signalkurs (halbe Gebühr, kein Kursabschlag). Kommt der Kurs
 nicht zurück, verfällt die Order nach 2 Kerzen. Schnelle Ausbrüche (Memecoins, Krisen-Bot, Trend-Aktien, Forex) kaufen
 sofort. Ziele werden als Limit-Verkauf ausgeführt, Stop-Loss immer sofort (Market).
@@ -99,8 +106,26 @@ Termine von Fed, EZB und US-Statistikamt (config/termine.json).
 Die Demo läuft mit ihrem Stand weiter (`state/` nicht löschen). Achtung: `config/allocation.json` enthält die Aufteilung –
 wer sie in der App geändert hat und sie behalten will, lädt `config` nicht mit hoch.
 
+## Fokus-Bot und Rangliste
+Idee aus der Anleitung „416-Market Trading Sphere“: nicht überall ein bisschen handeln, sondern alle Märkte bewerten und
+nur die beste Gelegenheit nehmen. Umgesetzt **ohne KI-Agenten im Betrieb** (kosten bei jedem Lauf Geld und lassen sich nicht
+ehrlich zurücktesten) und ohne Orderbuch-/Options-Daten (dafür gibt es keine verlässlichen kostenlosen Quellen, und bei einem
+Lauf alle 30 Minuten bringen sie kaum etwas). Die Note (0–1) setzt sich zusammen aus: bisherige Bilanz genau dieses Setups
+nach Gebühren (30 %), Trend (15 %), Chance/Risiko (15 %), Kosten (15 %), Nachrichten (10 %), Liquidität (10 %), Aktualität (5 %).
+Setups, die bisher klar verlieren, Nachrichten-Sperren und Klumpenrisiken sind ausgeschlossen. Die drei Varianten lernen, ab
+welcher Mindestnote (0,5 / 0,6 / 0,7) sich ein Kauf lohnt. Die behaupteten 200 $ → 4.523 $ in 48 Std. aus dem Video sind
+unbelegt – und passen nicht einmal zu den eigenen Regeln der Anleitung (1 % Risiko pro Trade).
+
+## Live-Ansichten (App → „Live“)
+- **Zentrale:** jeder Bot ist ein Roboter in seinem Team-Raum. Wer handelt, sitzt am Tisch (Bildschirm grün/rot), wer wartet, läuft herum.
+- **Orbit:** alle offenen Trades als Planeten – innen nah am Ziel, außen nah am Stop, in der Mitte das Sammelkonto.
+- **Rat:** wie Analyst, Nachrichten, großer Trend, Muster, Kollegen und Risiko-Manager über jeden Kauf abgestimmt haben –
+  und wer mit seiner Stimme bisher richtig lag.
+- **Kugel:** alle Märkte als Punkte (Farbe = Note, großer Punkt = Kaufsignal, Ring = Nr. 1), darunter die Rangliste.
+
 ## Bedienung
-- **App:** Bots (nach Teams) · News (Nachrichtenlage, Termine, Meldungen) · Konto (Aufteilung, Teams, Vorschlag des Portfolio-Managers).
+- **App:** Bots (nach Teams) · Live (Zentrale, Orbit, Rat, Kugel) · News (Nachrichtenlage, Termine, Meldungen) ·
+  Konto (Aufteilung, Teams, Vorschlag des Portfolio-Managers).
 - **Aufteilung ändern:** in der App (mit GitHub-Schlüssel, Anleitung in der App) oder am PC in `config/allocation.json`.
 - **Bot pausieren:** Actions → Trading-Bot → „…“ → Disable workflow. **Demo neu starten:** Ordner `state` löschen.
 - **Testen ohne Internet:** `python -m tests.simulate 44` (künstliche Kurse; prüft, dass alles fehlerfrei läuft) und

@@ -53,7 +53,8 @@ def scores_only(bot, st):
     return L.choose_variant(st, [LABELS[i] for i in range(len(bot["variants"]))])
 
 
-def run(bid, bot, st, rates, enabled, errors, unavailable, gate=None):
+def run(bid, bot, st, rates, enabled, errors, unavailable, gate=None, candidates=None):
+    """candidates: Liste für den Fokus-Bot – hier kommen frische, gültige Kaufsignale dieses Bots hinein."""
     labels = [LABELS[i] for i in range(len(bot["variants"]))]
     if bot.get("source") == "pumpfun":
         pumpfun.run(bot, st, rates, enabled, errors, gate)
@@ -93,9 +94,13 @@ def run(bid, bot, st, rates, enabled, errors, unavailable, gate=None):
         # 3) echtes Konto: aktive Variante + gelernte Muster, Risiko je Wert (Lernen) und Team-Entscheidung
         mult = L.pair_multiplier(st, pair, st["real"]["trades"])
         act = st["active"]
+        found = []
         A.process(st["real"], bot, pair, closed, rate, bot["variants"][act], act, mult=mult,
-                  can_open=enabled, gate=gate, fn=combined, tag_patterns=True, live=live, stats=stats)
+                  can_open=enabled, gate=gate, fn=combined, tag_patterns=True, live=live, stats=stats, collect=found)
         st["real"]["marks"][pair] = live["c"] * rate
+        if candidates is not None:   # nur Signale der letzten abgeschlossenen Kerze sind frisch
+            fresh_t = closed[-1]["t"] + bot["tf"] * 60
+            candidates += [dict(c, bot=bid, pair=pair, rate=rate, last_t=closed[-1]["t"]) for c in found if c["t"] == fresh_t]
     L.track_patterns(st)
     save_checks(st, stats)
     return L.choose_variant(st, labels)

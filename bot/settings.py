@@ -10,7 +10,7 @@ POOL_START_EUR = 8000.0                      # Spielgeld im Sammelkonto
 MIN_ORDER_EUR = 10.0                         # kleinere Käufe lässt Kraken nicht zu
 MAX_DRAWDOWN_STOP = 0.25                     # Not-Aus je Bot: −25 % vom besten Stand -> keine neuen Trades
 WARMUP_CANDLES = 500                         # Schatten-Varianten lernen beim Start aus so vielen alten Kerzen
-ENGINE_VERSION = "4.4"                       # ändert sich die Handelslogik, startet das Lernen neu
+ENGINE_VERSION = "4.5"                       # ändert sich die Handelslogik, startet das Lernen neu
 MIN_RISK_FEE_MULT = 1.5                      # Stop muss mind. 1,5x so weit weg sein wie Kauf + Verkauf kosten
 CHECKS_KEEP = 48                             # Prüfprotokoll: so viele Läufe merken (48 = 24 Std.)
 RUN_BUDGET_MIN = 11                          # GitHub bricht einen Lauf nach 15 Min. ab: nach 11 Min. werden übrige
@@ -29,6 +29,17 @@ FEES = {
     "fx": {"maker": 0.0020, "taker": 0.0020},      # Devisen-Paare
     "dex": {"maker": 0.01, "taker": 0.01},         # pump.fun auf Solana: Swap-Gebühr + Priority Fee (geschätzt)
 }
+# --- Börsen ------------------------------------------------------------------------------
+# Krypto wird bei Revolut X gehandelt (MiCA-Lizenz Zypern): 0 % Maker / 0,09 % Taker, unabhängig vom Umsatz
+# (revolut.com/business/revolut-x-eea, Stand Okt. 2026). Viele Coins sind dort aber dünn gehandelt –
+# ist die Geld-Brief-Spanne größer als MAX_SPREAD, kostet der Kursabschlag mehr als man spart: dann Kraken.
+# Aktien-Token und Devisen bleiben bei Kraken (dort ohnehin günstig). Kurse für die Demo: Kraken (gleiche Marktpreise).
+CRYPTO_VENUE = "revolutx"    # "kraken" = alles wie früher bei Kraken
+MAX_SPREAD = 0.003           # Revolut X nur bei Spanne <= 0,3 %
+MIN_SLIP = 0.0005            # Kursabschlag bei Market-Orders an Revolut X mind. 0,05 % (sonst halbe Spanne)
+VENUES = {"revolutx": {"label": "Revolut X", "maker": 0.0, "taker": 0.0009},
+          "kraken": {"label": "Kraken"}, "dex": {"label": "Solana-DEX"}}
+
 LIMIT_RULES = {
     "offset_r": 0.1,     # Limit-Kauf 10 % der Stop-Distanz unter dem Signalkurs
     "valid": 2,          # Order gilt 2 Kerzen, danach wird sie gelöscht ...
@@ -45,6 +56,14 @@ LEARN_RULES = {
     "pattern_risk": 0.5,        # gelernte Muster handelt das echte Konto zusätzlich mit halbem Risiko
     "pattern_confirm": 1.2,     # Signal + gelerntes Kaufmuster gleichzeitig -> 1,2x Risiko
     "pattern_warn": 0.5,        # Warnmuster (z. B. Doppeltop) beim Kauf -> halbes Risiko
+}
+
+# --- Fokus-Bot: handelt nur die beste Gelegenheit über alle Märkte (brain/ranking.py) -------
+FOCUS_RULES = {
+    "daily_loss": 0.03,   # Tagesverlust-Limit: −3 % seit Tagesbeginn (UTC) -> bis morgen keine neuen Trades
+    "weights": {"edge": 0.30, "trend": 0.15, "rr": 0.15, "cost": 0.15, "news": 0.10, "liq": 0.10, "fresh": 0.05},
+    "bad_edge": -0.10,    # Setup verliert bisher klar (Lern-Score <= −0,10 bei >= 10 Tests) -> ausgeschlossen
+    "board": 10,          # so viele Plätze zeigt die Rangliste
 }
 
 # --- Marktlage (Analyst): Risiko-Faktor je Marktlage --------------------------------

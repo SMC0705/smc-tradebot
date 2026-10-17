@@ -15,6 +15,7 @@ smc-tradebot/
 │  ├─ data/                  1) DATEN HOLEN – entscheidet nichts
 │  │  ├─ http.py             gemeinsamer Abruf mit Wartezeiten je Anbieter
 │  │  ├─ kraken.py           Kerzen von Kraken + Wechselkurse nach EUR
+│  │  ├─ revolutx.py         Revolut X: Geld/Brief aller Coins (ein Abruf pro Lauf)
 │  │  ├─ dex.py              pump.fun-Daten (GeckoTerminal, DexScreener)
 │  │  └─ news.py             RSS-Feeds, GDELT, Fear & Greed, Wirtschaftstermine
 │  ├─ strategies/            2) SIGNALE – "Kaufen? Wo ist der Stop? Wo das Ziel?"
@@ -26,6 +27,8 @@ smc-tradebot/
 │  ├─ trading/               3) AUSFÜHREN – Geld, Positionen, Stops
 │  │  ├─ account.py          Konto: Gebühren, Kauf-Orders (Limit/Market), Stop/Ziel/Trailing, Prüfprotokoll-Zähler
 │  │  ├─ runner.py           einen Bot laufen lassen (Schatten-Varianten + echtes Konto), Prüfprotokoll speichern
+│  │  ├─ venues.py           BÖRSEN & KOSTEN: welcher Wert wo gehandelt wird (Revolut X / Kraken / DEX) und was es kostet
+│  │  ├─ focus.py            Fokus-Bot: übernimmt nur das beste Signal aller Bots (1 Position, Tageslimit 3 %)
 │  │  ├─ pumpfun.py          Sonderfall pump.fun (Scan + Filter + Ausführung), Profile "safe" und "all"
 │  │  └─ pool.py             Sammelkonto: Aufteilung auf die Bots, Umbuchungen
 │  └─ brain/                 4) ENTSCHEIDEN – über den einzelnen Bots
@@ -34,6 +37,7 @@ smc-tradebot/
 │     ├─ news_analyst.py     Nachrichtenlage, Termin-Sperren, Coin-Warnungen, Krisen-Themen
 │     ├─ risk.py             Risiko-Manager: Team-Pausen, Kollegen-Warnung, Klumpenrisiko
 │     ├─ portfolio.py        Vorschlag für die Geld-Aufteilung
+│     ├─ ranking.py          Rangliste: Note 0–1 für jede frische Kauf-Gelegenheit + Markt-Karte für die Kugel
 │     └─ team.py             bündelt alles zu EINER Kauf-Entscheidung: gate()
 ├─ config/                   von DIR (oder der App) änderbar
 │  ├─ allocation.json        Geld-Aufteilung und Team-Zuordnung
@@ -41,14 +45,14 @@ smc-tradebot/
 ├─ state/v2/                 vom Bot geschrieben – NIE von Hand ändern (Löschen = Neustart der Demo)
 │  ├─ <bot>.json             je Bot: echtes Konto, Schatten-Varianten, Lern-Protokoll
 │  ├─ pool.json · team.json · news.json
-├─ docs/                     die Handy-App (GitHub Pages): index.html, data/status.json
+├─ docs/                     die Handy-App (GitHub Pages): index.html, visuals.js (Live-Ansichten), data/status.json
 ├─ tests/                    Tests ohne Internet: python -m tests.simulate 44 · python -m tests.test_orders
 └─ .github/workflows/bot.yml Zeitplan: alle 30 Minuten python -m bot.main
 ```
 
 ## Ablauf eines Laufs (bot/main.py)
 1. **Zustand laden:** Konten aller Bots, Sammelkonto, Team- und Nachrichten-Zustand, Aufteilung.
-2. **Daten holen:** Wechselkurse (EUR/USD …) und Nachrichten.
+2. **Daten holen:** Wechselkurse (EUR/USD …), Nachrichten, Geld/Brief aller Coins bei Revolut X.
 3. **Gehirn:** Nachrichtenlage bewerten → Marktlage je Team (Analyst) → Team-Pausen (Risiko-Manager).
 4. **Bots laufen lassen** (trading/runner.py), je Wert:
    1. neue Kerzen holen
@@ -57,6 +61,9 @@ smc-tradebot/
    4. das echte Konto spielt sie mit der aktiven Variante durch und handelt zusätzlich die *gelernten* Muster
       (halbes Risiko). Vor jeder Kauf-Order fragt es das Team: `team.gate()`
    5. wartende Orders werden gegen die laufende Kerze geprüft (Kauf im selben Lauf)
+   6. jedes gültige, frische Signal (nach dem Gebühren-Filter) wird außerdem Kandidat für den Fokus-Bot
+4b. **Fokus-Bot:** alle Kandidaten bewerten (`brain/ranking.py`), nur der beste wird gehandelt (`trading/focus.py`);
+    Markt-Karte aller Märkte für die Kugel in der App.
 5. **Abschluss:** Prüfprotokoll je Bot, Sammelkonto umverteilen, alles speichern, `docs/data/status.json` schreiben.
 
 Zeitlimit: GitHub bricht einen Lauf nach 15 Min. ab. Dauert ein Lauf länger als `settings.RUN_BUDGET_MIN` (11 Min.),
@@ -75,7 +82,13 @@ Vorsichtig gerechnet: In der Kerze eines Limit-Kaufs zählt nur der Stop. Jeder 
 
 Reihenfolge in `team.gate()`: Team-Pause → Nachrichten (Termin-Sperre, Coin-Warnung, Krisen-Thema, Nachrichtenlage,
 Gier) → Kollegen-Warnung → Klumpenrisiko → Marktlage → Warnmuster (x0,5) / bestätigendes gelerntes Muster (x1,2)
-→ größerer Trend → Konsens. Jede Entscheidung landet im Team-Protokoll.
+→ größerer Trend → Konsens. Jede Entscheidung landet im Team-Protokoll. Zusätzlich speichert das Gate die Stimmen der
+sechs „Rats“-Mitglieder (Analyst, Nachrichten, großer Trend, Muster, Kollegen, Risiko) – am Trade und im Rats-Protokoll
+(`team.json` → `council`); die App zeigt daraus, wer bisher richtig lag.
+
+Kosten je Börse: `venues.venue(bot, pair)` liefert Maker-/Taker-Gebühr und Kursabschlag. Krypto geht an Revolut X, wenn
+der Coin dort mit einer Spanne ≤ `settings.MAX_SPREAD` gehandelt wird, sonst an Kraken. Die Position speichert Börse und
+Gebühren beim Kauf, der Verkauf rechnet mit denselben.
 
 ## Rezepte
 - **Neuen Bot anlegen:** Eintrag in `bot/bots.py` (Strategie wählen, 3 Varianten, `weight` = Standard-Anteil).
@@ -86,7 +99,10 @@ Gier) → Kollegen-Warnung → Klumpenrisiko → Marktlage → Warnmuster (x0,5)
 - **Neue Nachrichtenquelle:** RSS-Adresse in `settings.NEWS_FEEDS` bzw. Redaktion in `settings.NEWS_DOMAINS`. Nur seriöse Quellen!
 - **Neues Stichwort/Thema:** `settings.THEMES`. Krisen-Werte dazu in `markets.ASSET_THEMES`.
 - **Termine:** `config/termine.json` (Zeit in UTC). **US-Börsenfeiertage:** `markets.US_HOLIDAYS` (jährlich ergänzen).
-- **Gebühren:** `settings.FEES` bzw. `settings.KRAKEN_TIER` (Krypto-Gebührenstufe). **Kaufart:** `entry` in `bots.py`.
+- **Gebühren:** `settings.FEES`, `settings.VENUES`, `settings.KRAKEN_TIER`. **Börse für Krypto:** `settings.CRYPTO_VENUE`.
+  **Kaufart:** `entry` in `bots.py`.
+- **Fokus-Bot:** Gewichte und Tageslimit in `settings.FOCUS_RULES`, Mindestnoten als Varianten in `bots.py`.
+- **Live-Ansichten der App:** `docs/visuals.js` (eine Funktion je Ansicht: Zentrale, Orbit, Rat, Kugel).
 - **Regeln/Grenzwerte ändern:** nur in `bot/settings.py`.
 - **Varianten ändern:** Das Lernen dieses Bots startet automatisch neu. Das echte Konto bleibt.
 - **pump.fun-Filter:** `PROFILES` in `bot/trading/pumpfun.py` ("safe" = vorsichtig, "all" = ganzer Markt); ein Bot wählt sein

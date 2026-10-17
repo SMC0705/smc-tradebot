@@ -4,6 +4,7 @@ from bot import settings as S
 from bot.bots import BOTS
 from bot.markets import us_session
 from bot.trading import account as A
+from bot.trading import venues as V
 
 T0 = 1_790_000_000 - 1_790_000_000 % 3600
 
@@ -145,9 +146,45 @@ def test_us_session_eod():
     return "Aktien-Daytrading: nur zur Börsenzeit, Verkauf zum Börsenschluss"
 
 
+def test_revolutx_venue():
+    from bot.data import revolutx
+    old = revolutx._quotes
+    try:
+        revolutx._quotes = {"BTC/EUR": {"bid": 100.0, "ask": 100.04, "spread": 0.0004, "vol": 1e7},
+                            "DOT/EUR": {"bid": 100.0, "ask": 101.2, "spread": 0.012, "vol": 9e4}}
+        bot = dict(BOTS["trend"], cooldown=0)
+        v = V.venue(bot, "XBTEUR")
+        assert v["name"] == "revolutx" and (v["maker"], v["taker"]) == (0.0, 0.0009) and close(v["slip"], 0.0005), v
+        assert V.venue(bot, "DOTEUR")["name"] == "kraken"          # Spanne zu groß -> Kraken
+        assert V.venue(bot, "LTCEUR")["name"] == "kraken"          # nicht gelistet -> Kraken
+        assert V.venue(BOTS["stocks"], "AAPLxUSD")["name"] == "kraken"
+        assert close(A.min_stop(bot, "XBTEUR", "limit"), 1.5 * (0.0 + 0.0009 + 0.0005))
+        # Kauf per Limit an Revolut X (0 % Gebühr), Stop als Market (0,09 % + Kursabschlag)
+        rows = [(100, 101, 99, 100)] * 3 + [(100, 100.5, 99.5, 100)] + [(100, 100.2, 96.5, 97)]
+        cs = candles(rows)
+        acc, st = run(bot, "XBTEUR", cs, once(cs[3]["t"], 97.0, 104.0))
+        t = acc["trades"][0]
+        L = t["entry"]
+        qty = min(1000 * bot["risk"] / (L - 97.0), 1000 * bot["frac"] / L)
+        pnl = qty * 97 * (1 - 0.0005) * (1 - 0.0009) - qty * L
+        assert t["venue"] == "revolutx" and close(acc["cash"], 1000 + pnl, 1e-6), (t, pnl)
+        # Börse wechselt nach dem Kauf (Coin plötzlich nicht mehr gelistet): Verkauf trotzdem mit Revolut-X-Kosten
+        acc2, _ = run(bot, "XBTEUR", cs[:4], once(cs[3]["t"], 97.0, 104.0),
+                      live={"t": cs[3]["t"] + 3600, "o": 100, "h": 100.2, "l": 99.6, "c": 100, "v": 1})
+        p = acc2["positions"]["XBTEUR"]
+        assert p["venue"] == "revolutx" and p["fee_t"] == 0.0009 and p["cost"] == p["qty"] * p["entry"], p
+        revolutx._quotes = {}
+        A.close_position(acc2, bot, "XBTEUR", 100.0, cs[3]["t"] + 7200, 1.0, "Test")
+        assert acc2["trades"][-1]["venue"] == "revolutx"
+        assert close(acc2["cash"], 1000 - p["cost"] + p["qty"] * 100.0 * (1 - 0.0009), 1e-9)
+    finally:
+        revolutx._quotes = old
+    return "Krypto an Revolut X: 0 % Limit / 0,09 % sofort, enge Coins dort, weite Spanne bei Kraken"
+
+
 def main():
     tests = [test_limit_fill_target_maker, test_stop_taker_and_fill_candle_rule, test_limit_expires, test_limit_expires_over_gap,
-             test_market_fill_and_live, test_live_limit_fill, test_fee_filter, test_us_session_eod]
+             test_market_fill_and_live, test_live_limit_fill, test_fee_filter, test_us_session_eod, test_revolutx_venue]
     for t in tests:
         print("✓", t())
     print(f"\n{len(tests)} Order-Tests bestanden.")

@@ -5,7 +5,7 @@ import hashlib
 import random
 import time
 
-from bot.data import dex, kraken, news
+from bot.data import dex, kraken, news, revolutx
 
 T0 = 1_780_000_000 - (1_780_000_000 % 86400)   # fester Startzeitpunkt (Mitternacht UTC)
 NOW = [T0]
@@ -43,6 +43,13 @@ def get_candles(pair, interval, aclass=None):
         _series[key] = _gen(pair, interval, 720 + 10 * 86400 // (interval * 60) + 10)
     cs = [c for c in _series[key] if c["t"] <= NOW[0]][-721:]
     return cs[:-1], cs[-1]
+
+
+def _peek(pair, interval):
+    try:
+        return get_candles(pair, interval)
+    except ValueError:
+        return None
 
 
 # --- pump.fun -------------------------------------------------------------------
@@ -101,13 +108,30 @@ def _news(errors, cache=None):
             "ok": ["Test-Quelle"], "failed": [], "fetched": NOW[0]}
 
 
+def _revx(errors):
+    """Revolut X: enge Spannen für große Coins, weite für kleine, manche gar nicht gelistet."""
+    r = random.Random(_seed("revx", NOW[0] // 1800))
+    out = {}
+    for base in ("BTC", "ETH", "SOL", "XRP", "ADA", "LINK", "AAVE", "AVAX", "ATOM", "INJ", "NEAR", "SUI", "LTC",
+                 "PEPE", "WIF", "XLM", "ARB"):
+        sp = r.uniform(0.0002, 0.002)
+        out[f"{base}/EUR"] = {"bid": 100.0, "ask": 100.0 * (1 + sp), "spread": sp, "vol": 1e6}
+    for base in ("DOT", "UNI", "BCH", "POL", "TRX", "APT", "FIL", "FLOKI", "SHIB", "BONK"):
+        sp = r.uniform(0.005, 0.03)
+        out[f"{base}/EUR"] = {"bid": 100.0, "ask": 100.0 * (1 + sp), "spread": sp, "vol": 2e4}
+    revolutx._quotes = out
+    return out
+
+
 def install():
     """Alle Datenquellen durch Testdaten ersetzen und die Uhr kontrollierbar machen."""
     kraken.get_candles = get_candles
+    kraken.peek = _peek
     dex.gt_pools, dex.ds_trending_mints = _pools, (lambda: TOKENS[20:])
     dex.ds_tokens = lambda ms: [p for p in _pools() if p["mint"] in ms]
     dex.candles_5m = _candles_5m
     news.collect = _news
+    revolutx.load = _revx
     time.time = lambda: NOW[0]
 
 

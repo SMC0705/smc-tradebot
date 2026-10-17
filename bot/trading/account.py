@@ -1,6 +1,6 @@
 """Konto & Ausführung (Paper-Trading): Kauf-Orders, Positionsgröße, Stop-Loss, Ziel, Trailing-Stop,
-Zeit-Ausstiege und Gebühren wie bei Kraken. Alle Beträge im Konto in EUR. Kurse von USD/JPY/...-Paaren
-werden mit `rate` (EUR je Einheit) umgerechnet.
+Zeit-Ausstiege und Gebühren der jeweiligen Börse (trading/venues.py). Alle Beträge im Konto in EUR.
+Kurse von USD/JPY/...-Paaren werden mit `rate` (EUR je Einheit) umgerechnet.
 
 Weg eines Trades (identisch in Demo und Lern-Konten):
   1. Signal bei Kerzenschluss -> Gebühren-Filter -> eigene Regeln (Pause, Abkühlung, Limits) -> Team
@@ -13,8 +13,11 @@ Weg eines Trades (identisch in Demo und Lern-Konten):
 Vorsichtig gerechnet: In der Kerze eines Limit-Kaufs zählt nur der Stop, nicht das Ziel (Reihenfolge unbekannt).
 """
 from .. import settings as S
-from ..markets import FOREX, display, us_session
+from ..markets import display, us_session
 from ..strategies import EXITS, SIGNALS, WINDOW, patterns
+from . import venues as V
+
+fee_class = V.fee_class
 
 
 def new_account(cash=0.0):
@@ -27,21 +30,11 @@ def equity(acc):
                              for pair, p in acc["positions"].items())
 
 
-# --- Gebühren ----------------------------------------------------------------------------
-def fee_class(bot, pair):
-    if bot.get("source") == "pumpfun":
-        return "dex"
-    if pair in FOREX:
-        return "fx"
-    if pair.endswith("xUSD"):      # Kraken xStocks (Aktien-Token)
-        return "xstocks"
-    return "crypto"
-
-
+# --- Gebühren (je nach Börse, siehe trading/venues.py) --------------------------------------
 def fees(bot, pair):
-    """(Maker, Taker) je Richtung für diesen Wert – siehe settings.FEES."""
-    f = S.FEES[fee_class(bot, pair)]
-    return f["maker"], f["taker"]
+    """(Maker, Taker) je Richtung für diesen Wert an seiner Börse."""
+    v = V.venue(bot, pair)
+    return v["maker"], v["taker"]
 
 
 def order_type(bot, params=None):
@@ -50,9 +43,9 @@ def order_type(bot, params=None):
 
 def costs(bot, pair, typ):
     """Kauf + Verkauf als Anteil vom Kurs. Verkauf im ungünstigen Fall per Stop (= Market)."""
-    maker, taker = fees(bot, pair)
-    buy = maker if typ == "limit" else taker + bot["slip"]
-    return buy + taker + bot["slip"]
+    v = V.venue(bot, pair)
+    buy = v["maker"] if typ == "limit" else v["taker"] + v["slip"]
+    return buy + v["taker"] + v["slip"]
 
 
 def min_stop(bot, pair, typ):
@@ -69,9 +62,10 @@ def worth_it(bot, pair, sig, price, typ="market"):
 def open_position(acc, bot, pair, sig, px, t, rate, mult, maker=False):
     """Kauft. maker=True: Limit-Order zum Preis px. Sonst Market (mit Kursabschlag).
     Gibt None zurück, wenn gekauft wurde – sonst den Grund, warum nicht."""
-    f_maker, f_taker = fees(bot, pair)
+    v = V.venue(bot, pair)
+    f_maker, f_taker, slip = v["maker"], v["taker"], v["slip"]
     fee = f_maker if maker else f_taker
-    fill = px if maker else px * (1 + bot["slip"])
+    fill = px if maker else px * (1 + slip)
     if fill <= sig["stop"] or fill >= sig["target"]:
         return "Kurs schon unter dem Stop bzw. über dem Ziel"
     mult *= sig.get("risk_mult", 1.0)
@@ -91,10 +85,12 @@ def open_position(acc, bot, pair, sig, px, t, rate, mult, maker=False):
         "pair": pair, "qty": qty, "entry": fill, "rate": rate, "cost": cost,
         "risk_eur": qty * (fill - sig["stop"]) * rate + cost - qty * fill * rate,
         "stop": sig["stop"], "init_stop": sig["stop"], "target": sig["target"],
-        "be": fill * (1 + fee) / ((1 - f_taker) * (1 - bot["slip"])),   # Einstand nach allen Kosten
+        "be": fill * (1 + fee) / ((1 - f_taker) * (1 - slip)),   # Einstand nach allen Kosten
+        "venue": v["name"], "fee_m": f_maker, "fee_t": f_taker, "slip": slip,   # Verkauf an derselben Börse
         "maker_in": maker, "trail_n": sig.get("trail_n"), "max_hold": sig.get("max_hold"), "eod": sig.get("eod"),
         "opened_t": t, "bars": 0, "reason": sig["reason"], "variant": sig.get("variant", 0),
         "exit": sig.get("exit"), "exit_p": sig.get("exit_p"), "pattern": sig.get("pattern"),
+        "votes": sig.get("votes"),
     }
     return None
 
@@ -103,7 +99,7 @@ def close_position(acc, bot, pair, px, t, rate, result, maker=False):
     """Verkauft. maker=True: Limit-Verkauf (Ziel), sonst Market."""
     p = acc["positions"].pop(pair)
     acc.setdefault("cool", {})[pair] = t  # Abkühlphase: kein sofortiger Wiedereinstieg
-    f_maker, f_taker = fees(bot, pair)
+    f_maker, f_taker = (p["fee_m"], p["fee_t"]) if "fee_t" in p else fees(bot, pair)
     proceeds = p["qty"] * px * rate * (1 - (f_maker if maker else f_taker))
     acc["cash"] += proceeds
     pnl = proceeds - p["cost"]
@@ -117,7 +113,7 @@ def close_position(acc, bot, pair, px, t, rate, result, maker=False):
         "pair": pair, "entry": p["entry"], "exit": px, "pnl": round(pnl, 2),
         "pnl_pct": round(pnl / p["cost"] * 100, 2), "r": round(pnl / max(p["risk_eur"], 1e-9), 3),
         "opened_t": p["opened_t"], "closed_t": t, "result": result, "reason": p["reason"],
-        "variant": p["variant"], "pattern": p.get("pattern"),
+        "variant": p["variant"], "pattern": p.get("pattern"), "venue": p.get("venue"), "votes": p.get("votes"),
     })
     acc["trades"] = acc["trades"][-400:]
 
@@ -133,7 +129,7 @@ def manage(acc, bot, pair, c, i, rate):
     """Prüft eine offene Position gegen Kerze c[i]: Stop, Ziel, Zeit, Signal-Ausstieg, Nachziehen."""
     p, k = acc["positions"][pair], c[i]
     p["bars"] += 1
-    slip = bot["slip"]
+    slip = p.get("slip", bot["slip"])
     if k["l"] <= p["stop"]:   # Stop-Loss = Market-Verkauf
         px = min(p["stop"], k["o"]) * (1 - slip)
         if p["stop"] > p["entry"]:
@@ -179,6 +175,9 @@ def _count(stats, key, t=None, pair=None, note=None):
         stats["notes"].append([PRIO.get(key, 9), t, f"{display(pair)}: {note}"])
 
 
+count = _count   # öffentlich, z. B. für den Fokus-Bot
+
+
 def _pct(x):
     return f"{x * 100:.2f}".rstrip("0").rstrip(".").replace(".", ",") + " %"
 
@@ -222,17 +221,22 @@ def _place(acc, bot, pair, s, window, k, params, variant, ctx, tag_patterns):
         _count(stats, "too_small", t, pair, f"Signal zu klein – Stop {_pct((price - s['stop']) / price)} entfernt, "
                                             f"nötig {_pct(min_stop(bot, pair, typ))} (Gebühren)")
         return
-    why = _own_block(acc, bot, pair, t, ctx)
-    if why:
-        _count(stats, "own", t, pair, f"Signal, aber {why}")
-        return
     s["variant"] = variant
     if tag_patterns:   # für das Team: passende Kauf- bzw. Warnmuster zum Signal
         s["confirm"] = [x["pattern"] for x in patterns.find(window)]
         s["warn"] = patterns.bearish_names(window)
+    if ctx.get("collect") is not None:   # Kandidat für den Fokus-Bot (Rangliste über alle Märkte)
+        ctx["collect"].append({"sig": dict(s), "price": price, "typ": typ, "t": t,
+                               "cost_r": costs(bot, pair, typ) / ((price - s["stop"]) / price)})
+    why = _own_block(acc, bot, pair, t, ctx)
+    if why:
+        _count(stats, "own", t, pair, f"Signal, aber {why}")
+        return
     m, gate = ctx["mult"], ctx["gate"]
     if gate:
         m *= gate(pair, s, t)
+        if getattr(gate, "votes", None):
+            s["votes"] = gate.votes   # Abstimmung des Rats – wird mit dem Trade gespeichert
         if m <= 0:
             _count(stats, "team", t, pair, f"Team sagt nein – {getattr(gate, 'reason', None) or 'Team-Regel'}")
             return
@@ -240,6 +244,12 @@ def _place(acc, bot, pair, s, window, k, params, variant, ctx, tag_patterns):
     acc["pending"][pair] = {"sig": s, "type": typ, "price": price, "from": t, "until": t + valid * tf, "m": m}
     _count(stats, "orders", t, pair, f"Limit-Kauf bei {_num(price)} gelegt ({s['reason']})" if typ == "limit"
                                      else f"Kauf zum Marktpreis ({s['reason']})")
+
+
+def place_order(acc, bot, pair, sig, price, typ, t, m):
+    """Legt eine Kauf-Order direkt an (für den Fokus-Bot, der Signale anderer Bots übernimmt)."""
+    valid = S.LIMIT_RULES["valid_daily" if bot["tf"] >= 1440 else "valid"]
+    acc["pending"][pair] = {"sig": sig, "type": typ, "price": price, "from": t, "until": t + valid * bot["tf"] * 60, "m": m}
 
 
 def _fill(acc, bot, pair, k, rate, ctx, final):
@@ -286,11 +296,12 @@ def _fill(acc, bot, pair, k, rate, ctx, final):
 
 
 def process(acc, bot, pair, closed, rate, params, variant, mult=1.0, can_open=True, start_from=None, gate=None,
-            fn=None, tag_patterns=False, live=None, stats=None):
+            fn=None, tag_patterns=False, live=None, stats=None, collect=None):
     """Verarbeitet alle neuen abgeschlossenen Kerzen eines Paares für ein Konto, danach die laufende Kerze.
     gate(pair, signal, t) -> Faktor fürs Risiko (0 = Team blockiert); nur fürs echte Konto.
     fn = eigene Signal-Funktion (sonst die Strategie des Bots). tag_patterns = Muster-Hinweise an Signale hängen.
-    live = laufende Kerze (Orders werden sofort geprüft). stats = Zähler fürs Prüfprotokoll."""
+    live = laufende Kerze (Orders werden sofort geprüft). stats = Zähler fürs Prüfprotokoll.
+    collect = Liste, in die gültige Signale (nach dem Gebühren-Filter) als Kandidaten für den Fokus-Bot kommen."""
     fn = fn or SIGNALS[bot["strategy"]]
     last = acc["last_t"].get(pair)
     if last is None:
@@ -299,7 +310,7 @@ def process(acc, bot, pair, closed, rate, params, variant, mult=1.0, can_open=Tr
             acc["marks"][pair] = closed[-1]["c"] * rate
             return
         last = closed[max(start_from, 0)]["t"] - 1
-    ctx = {"mult": mult, "can_open": can_open, "gate": gate, "stats": stats}
+    ctx = {"mult": mult, "can_open": can_open, "gate": gate, "stats": stats, "collect": collect}
     for i, k in enumerate(closed):
         if k["t"] <= last:
             continue

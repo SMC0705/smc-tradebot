@@ -19,6 +19,7 @@ TEAMS = {
     "meme": "Memecoin-Team",
     "markt": "Aktien & Devisen",
     "makro": "Makro & Krisen",
+    "fokus": "Fokus (Top-1)",
 }
 
 _BASE = dict(risk=0.02, max_pos=3, frac=0.33, slip=0.001, aclass=None, cooldown=3, entry="limit", weight=5,
@@ -47,16 +48,16 @@ BOTS = {
                       {"fast": 10, "slow": 30, "rr": 2.0},
                       {"fast": 20, "slow": 50, "rr": 3.0}]),
     # Zweiter Trendfolger zum Vergleich: kauft Rücksetzer im Trend und lässt Gewinne mit nachgezogenem Stop laufen
-    "trend2": dict(_BASE, name="Trendfolge 2", style="Stunden", tf=60, market="Krypto", pairs=CRYPTO, weight=9,
+    "trend2": dict(_BASE, name="Trendfolge 2", style="Stunden", tf=60, market="Krypto", pairs=CRYPTO, weight=8,
                    strategy="trend", regime_rules=REGIME_TREND, variants=[
                        {"mode": "pullback", "trail": 10},               # Rücksetzer + nachgezogener Stop
                        {"mode": "pullback", "rr": 2.0},                 # Rücksetzer + festes Ziel
                        {"fast": 20, "slow": 50, "trail": 10}]),         # Kreuzung wie Trendfolge 1 + nachgezogener Stop
     # Größere Bewegungen: hier fallen die Gebühren kaum ins Gewicht
     "breakout": dict(_BASE, name="Ausbruch 4 Std.", style="4 Stunden", tf=240, market="Krypto", pairs=CRYPTO,
-                     weight=8, strategy="swing", regime_rules=REGIME_TREND, variants=[
+                     weight=7, strategy="swing", regime_rules=REGIME_TREND, variants=[
                          {"n": 20, "trail": 10}, {"n": 20, "trail": 10, "entry": "market"}, {"n": 55, "trail": 20}]),
-    "swing": dict(_BASE, name="Swing (Turtle)", style="Tage", tf=1440, market="Krypto", pairs=CRYPTO, weight=9,
+    "swing": dict(_BASE, name="Swing (Turtle)", style="Tage", tf=1440, market="Krypto", pairs=CRYPTO, weight=8,
                   strategy="swing", regime_rules=REGIME_TREND, variants=[
                       {"n": 20, "trail": 10}, {"n": 55, "trail": 20}, {"n": 20, "trail": 10, "entry": "market"}]),
     # --- Memecoin-Team -----------------------------------------------------------
@@ -74,19 +75,19 @@ BOTS = {
     # Zweiter pump.fun-Bot zum Vergleich: handelt den ganzen pump.fun-Markt (auch die Bonding-Curve), nur Mindestfilter
     "pump2": dict(_BASE, name="pump.fun Alles", style="5 Minuten", tf=5, market="Solana", pairs=[], source="pumpfun",
                   strategy="meme", team="meme", regime_src="SOLEUR", risk=0.01, max_pos=5, frac=0.08,
-                  slip=0.02, entry="market", weight=5, scan="all", variants=[
+                  slip=0.02, entry="market", weight=4, scan="all", variants=[
                       {"stop": 0.15, "target": 0.40, "trail": 12},
                       {"stop": 0.25, "target": 1.00, "trail": 24},
                       {"stop": 0.10, "target": 0.30, "trail": 6}]),
     # --- Aktien & Devisen --------------------------------------------------------
     "stocks": dict(_BASE, **_STOCK, name="Aktien", style="Stunden", tf=60, market="Aktien", pairs=STOCKS,
-                   strategy="trend", max_pos=5, frac=0.2, weight=10, variants=[
+                   strategy="trend", max_pos=5, frac=0.2, weight=9, variants=[
                        {"fast": 20, "slow": 50, "rr": 2.0},
                        {"fast": 10, "slow": 30, "rr": 2.0},
                        {"fast": 20, "slow": 50, "rr": 3.0}]),
     # Aktien-Token kosten nur 0,08 % (Limit 0 %) – hier lohnen sich auch kleine Tagesbewegungen
     "stockday": dict(_BASE, **_STOCK, name="Aktien-Daytrading", style="15 Minuten", tf=15, market="Aktien",
-                     pairs=STOCKS, strategy="stockday", session="us", risk=0.01, max_pos=3, frac=0.25, weight=10,
+                     pairs=STOCKS, strategy="stockday", session="us", risk=0.01, max_pos=3, frac=0.25, weight=9,
                      variants=[{"mode": "orb", "or": 2, "stop": "mid", "rr": 2.0},     # Opening Range Breakout
                                {"mode": "pullback", "rr": 2.0},                        # Rücksetzer im Tagestrend
                                {"mode": "orb", "or": 4, "stop": "low", "rr": 1.5}]),
@@ -96,7 +97,7 @@ BOTS = {
                       variants=[{"pivot": 20, "max_loss": 0.08}, {"pivot": 10, "max_loss": 0.06},
                                 {"pivot": 50, "max_loss": 0.10}]),
     "rsi2": dict(_BASE, **_STOCK, name="Rücksetzer (Connors)", style="Tage", tf=1440, market="Aktien",
-                 pairs=STOCKS, strategy="rsi2", max_pos=4, frac=0.25, weight=6,
+                 pairs=STOCKS, strategy="rsi2", max_pos=4, frac=0.25, weight=5,
                  variants=[{"rsi": 10}, {"rsi": 5}, {"rsi": 15}]),
     "fx": dict(_BASE, name="Forex", style="4 Stunden", tf=240, market="Währungen", pairs=FOREX,
                strategy="trend", team="markt", regime_src=None, slip=0.0002, entry="market", weight=3, variants=[
@@ -112,4 +113,10 @@ BOTS = {
                       {"n": 24, "trail": 12, "hold": 168},
                       {"n": 48, "trail": 24, "hold": 336},
                       {"n": 12, "trail": 8, "hold": 96}]),
+    # --- Fokus (Top-1) ---------------------------------------------------------------
+    # Sieht die frischen Kaufsignale ALLER Bots, bewertet sie (brain/ranking.py) und handelt nur das beste:
+    # eine Position zur Zeit, 1 % Risiko, Tagesverlust-Limit 3 %. Varianten = Mindestnote für einen Kauf.
+    "focus": dict(_BASE, name="Fokus (Top-1)", style="beste Chance", tf=60, market="Alle Märkte", pairs=[],
+                  source="focus", strategy="focus", team="fokus", regime_src=None, risk=0.01, max_pos=1, frac=0.5,
+                  weight=7, variants=[{"min_score": 0.6}, {"min_score": 0.5}, {"min_score": 0.7}]),
 }
