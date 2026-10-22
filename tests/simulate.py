@@ -24,6 +24,8 @@ def check(status, k):
         assert len(b["positions"]) <= BOTS[bid]["max_pos"], f"Lauf {k}: {bid} zu viele Positionen"
         for o in b.get("orders", []):
             assert o["type"] in ("limit", "market"), f"Lauf {k}: {bid} unbekannte Order {o}"
+        lad = b["ladder"]   # Inkubations-Leiter: gültige Stufe, Ersatzbank kauft nichts
+        assert lad["stage"] in ("bank", "probe", "halb", "voll") and lad["factor"] == S.LADDER_RULES["factor"][lad["stage"]]
         if BOTS[bid].get("session") == "us":   # Börsen-Bot: nach Börsenschluss nichts mehr offen
             sess = us_session(status["updated_at"])
             if not sess or status["updated_at"] >= sess[1] + 60:
@@ -45,9 +47,11 @@ def main(runs):
     with open(S.STATUS_FILE) as f:
         st = json.load(f)
     print(f"\n✓ {runs} Läufe ohne Fehler. Testdaten: {S.STATUS_FILE}")
-    print(f"{'Bot':<26}{'Team':<10}{'Guthaben':>10}{'Trades':>8}  aktive Variante")
+    print(f"{'Bot':<26}{'Team':<10}{'Guthaben':>10}{'Trades':>8}  Variante  Leiter")
     for bid, b in st["bots"].items():
-        print(f"{b['name']:<26}{b['team']:<10}{b['equity']:>10.2f}{b['stats']['trades']:>8}  {b['learning']['active']}")
+        lad = b["ladder"]
+        print(f"{b['name']:<26}{b['team']:<10}{b['equity']:>10.2f}{b['stats']['trades']:>8}  {b['learning']['active']:<8}  "
+              f"{lad['name']} ({lad['share']}), {lad['health_text']}")
     n = st["news"]
     print(f"\nNachrichtenlage: {n['level_text']} | aktive Themen: {[t['label'] for t in n['themes'] if t['active']]}")
     for tid, t in st["teams"].items():

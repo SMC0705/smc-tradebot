@@ -11,6 +11,7 @@ MIN_ORDER_EUR = 10.0                         # kleinere Käufe lässt Kraken nic
 MAX_DRAWDOWN_STOP = 0.25                     # Not-Aus je Bot: −25 % vom besten Stand -> keine neuen Trades
 WARMUP_CANDLES = 500                         # Schatten-Varianten lernen beim Start aus so vielen alten Kerzen
 ENGINE_VERSION = "4.5"                       # ändert sich die Handelslogik, startet das Lernen neu
+RELEASE = "4.6"                              # Versionsnummer für die App (die Leiter ändert keine Signale -> kein Neu-Lernen)
 MIN_RISK_FEE_MULT = 1.5                      # Stop muss mind. 1,5x so weit weg sein wie Kauf + Verkauf kosten
 CHECKS_KEEP = 48                             # Prüfprotokoll: so viele Läufe merken (48 = 24 Std.)
 RUN_BUDGET_MIN = 11                          # GitHub bricht einen Lauf nach 15 Min. ab: nach 11 Min. werden übrige
@@ -56,6 +57,20 @@ LEARN_RULES = {
     "pattern_risk": 0.5,        # gelernte Muster handelt das echte Konto zusätzlich mit halbem Risiko
     "pattern_confirm": 1.2,     # Signal + gelerntes Kaufmuster gleichzeitig -> 1,2x Risiko
     "pattern_warn": 0.5,        # Warnmuster (z. B. Doppeltop) beim Kauf -> halbes Risiko
+}
+
+# --- Inkubations-Leiter & Decay-Check (brain/ladder.py) ------------------------------------
+# Jeder Bot muss sich mit echten (Demo-)Trades beweisen, bevor er volles Risiko bekommt. Aufstieg nur durch Trades,
+# nie durch Zeit. Alle 15 neuen Trades wird er neu bewertet; wer verliert, steigt ab oder kommt auf die Ersatzbank.
+LADDER_RULES = {
+    "factor": {"bank": 0.0, "probe": 0.25, "halb": 0.5, "voll": 1.0},   # Faktor aufs normale Risiko je Stufe
+    "start": "probe",   # hier startet jeder Bot (auch alle bestehenden beim ersten Lauf von v4.6)
+    "probe_n": 10,      # Probe -> ½: mind. 10 Trades auf der Probe-Stufe mit Ø R > 0
+    "halb_n": 20,       # ½ -> voll: mind. 20 Trades auf ½ mit Ø R > 0 ...
+    "climb_n": 30,      # ... und die letzten 30 Trades zusammen mit Ø R > 0
+    "review_n": 15,     # Decay-Check nach je 15 neuen abgeschlossenen Trades
+    "drop": 5,          # Note (0–100) mind. 5 Punkte unter der letzten -> "schwächelt" -> eine Stufe runter
+    "bench_n": 15,      # Ersatzbank -> Probe: eine Schatten-Variante mit mind. 15 Trades seit der Bank und Ø R > 0
 }
 
 # --- Fokus-Bot: handelt nur die beste Gelegenheit über alle Märkte (brain/ranking.py) -------

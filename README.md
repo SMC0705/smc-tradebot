@@ -54,6 +54,19 @@ sofort. Ziele werden als Limit-Verkauf ausgeführt, Stop-Loss immer sofort (Mark
 Das echte Konto folgt der Variante, die nachweislich am besten läuft. Schwache Werte bekommen weniger Risiko oder
 höchstens 24 Std. Pause (nur aufgrund von Live-Ergebnissen), danach gibt es einen neuen Versuch mit halbem Risiko.
 
+**Inkubations-Leiter (seit v4.6, Idee aus Algory):** Eine Strategie muss sich erst beweisen, bevor sie volles Risiko bekommt.
+Jeder Bot startet auf **Probe (¼ Risiko)**. Nach 10 abgeschlossenen Trades mit Ø R über 0 steigt er auf **Bewährung (½)**,
+nach weiteren 20 Trades im Plus – und wenn auch die letzten 30 Trades zusammen im Plus sind – auf **volles Risiko**.
+Aufgestiegen wird nur durch Trades, nie weil Zeit vergangen ist. Liegt ein Kauf mit ¼ Risiko unter der Mindestorder (10 €),
+kauft der Bot die Mindestgröße, aber nur, wenn deren Risiko nicht über seinem normalen vollen Risiko liegt.
+
+**Decay-Check:** Nach je 15 neuen Trades bekommt jeder Bot eine Note von 0 bis 100 (50 = kein Vorteil nach Gebühren).
+Verliert er im Schnitt, ist „Ersatz fällig“: eine Stufe runter, und die beste Schatten-Variante übernimmt. Fällt die Note
+um 5 Punkte oder mehr, „schwächelt“ er: ebenfalls eine Stufe runter. Wer auf der Probe-Stufe verliert und keine bessere
+Variante hat, kommt auf die **Ersatzbank** (nur noch Schatten-Trades) und kehrt zurück, sobald eine Variante seitdem
+15 Trades im Plus hat. Das ersetzt das Auf-0-%-Stellen schwacher Bots von Hand. Die App zeigt die Leiter auf der
+Startseite und bei jedem Bot den **Bot-Pass** (Stufe, Fortschritt, Note, Verlauf). Regeln: `LADDER_RULES` in `bot/settings.py`.
+
 **Muster:** Alle Bots kennen 12 klassische Kaufmuster (Doppelboden, Umgekehrte Schulter-Kopf-Schulter, Bullen-Flagge,
 Aufsteigendes Dreieck, Ausbruch + Retest, RSI-Divergenz, Bollinger-Squeeze, Inside Bar, Morgenstern, Drei weiße Soldaten,
 Engulfing, Hammer) und 7 Warnmuster (Doppeltop, Schulter-Kopf-Schulter, bärisches Engulfing, Sternschnuppe, Abendstern,
@@ -116,20 +129,25 @@ Setups, die bisher klar verlieren, Nachrichten-Sperren und Klumpenrisiken sind a
 welcher Mindestnote (0,5 / 0,6 / 0,7) sich ein Kauf lohnt. Die behaupteten 200 $ → 4.523 $ in 48 Std. aus dem Video sind
 unbelegt – und passen nicht einmal zu den eigenen Regeln der Anleitung (1 % Risiko pro Trade).
 
-## Live-Ansichten (App → „Live“)
-- **Zentrale:** jeder Bot ist ein Roboter in seinem Team-Raum. Wer handelt, sitzt am Tisch (Bildschirm grün/rot), wer wartet, läuft herum.
-- **Orbit:** alle offenen Trades als Planeten – innen nah am Ziel, außen nah am Stop, in der Mitte das Sammelkonto.
-- **Rat:** wie Analyst, Nachrichten, großer Trend, Muster, Kollegen und Risiko-Manager über jeden Kauf abgestimmt haben –
-  und wer mit seiner Stimme bisher richtig lag.
+## Live-Ansichten (App → „Live“, Weltraum-Look nach dem Raumschiff-Video)
+- **Raumschiff:** jeder Bot ist ein Roboter in seinem Team-Raum an Bord. Wer handelt, sitzt am Tisch (Bildschirm grün/rot),
+  wer auf ein Signal wartet, dreht ab und zu eine Runde. Der Ring unter dem Roboter zeigt die Stufe der Leiter, Sprechblasen
+  zeigen echte Ereignisse (offene Trades, letzter Trade, Prüfprotokoll). Raum antippen zoomt hinein, Roboter antippen öffnet
+  den Bot. Bots auf der Ersatzbank sitzen in ihrem eigenen Raum.
+- **Orbit:** alle offenen Trades als Planeten – innen nah am Ziel, außen nah am Stop, in der Mitte das Gesamtergebnis.
+  Kometen sind die letzten Entscheidungen des Rats (grün gekauft, rot abgelehnt).
+- **Rat:** wie Analyst, Nachrichten, großer Trend, Muster, Kollegen und Risiko-Manager über jeden Kauf abgestimmt haben
+  (Schilder JA, HM, NEIN, Stempel des Vorsitzes) – und wer mit seiner Stimme bisher richtig lag.
 - **Kugel:** alle Märkte als Punkte (Farbe = Note, großer Punkt = Kaufsignal, Ring = Nr. 1), darunter die Rangliste.
 
 ## Bedienung
-- **App:** Bots (nach Teams) · Live (Zentrale, Orbit, Rat, Kugel) · News (Nachrichtenlage, Termine, Meldungen) ·
+- **App:** Bots (Leiter, Teams, Bot-Pass) · Live (Raumschiff, Orbit, Rat, Kugel) · News (Nachrichtenlage, Termine, Meldungen) ·
   Konto (Aufteilung, Teams, Vorschlag des Portfolio-Managers).
 - **Aufteilung ändern:** in der App (mit GitHub-Schlüssel, Anleitung in der App) oder am PC in `config/allocation.json`.
 - **Bot pausieren:** Actions → Trading-Bot → „…“ → Disable workflow. **Demo neu starten:** Ordner `state` löschen.
-- **Testen ohne Internet:** `python -m tests.simulate 44` (künstliche Kurse; prüft, dass alles fehlerfrei läuft) und
-  `python -m tests.test_orders` (rechnet Orders und Gebühren an Beispielen nach).
+- **Testen ohne Internet:** `python -m tests.simulate 44` (künstliche Kurse; prüft, dass alles fehlerfrei läuft),
+  `python -m tests.test_orders` (rechnet Orders und Gebühren an Beispielen nach) und
+  `python -m tests.test_ladder` (prüft Inkubations-Leiter und Decay-Check).
 
 ## Nach 1–2 Monaten
 „Demo auswerten“ zu Claude sagen. Erst wenn die Ergebnisse überzeugen, kommt der Echtgeld-Teil dazu

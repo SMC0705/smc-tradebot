@@ -5,7 +5,7 @@ Ablauf:
   1. Zustand laden (Konten, Sammelkonto, Teams)
   2. Daten holen: Wechselkurse, Nachrichten
   3. Gehirn: Nachrichtenlage bewerten, Marktlage (Analyst), Team-Pausen (Risiko-Manager)
-  4. Jeden Bot laufen lassen (Kerzen nachspielen, kaufen/verkaufen)
+  4. Jeden Bot laufen lassen (Kerzen nachspielen, kaufen/verkaufen), danach Inkubations-Leiter + Decay-Check
   5. Sammelkonto umverteilen, Zustand speichern, Übersicht für die App schreiben
 """
 import sys
@@ -13,7 +13,7 @@ import time
 
 from . import report, settings as S, storage
 from .bots import BOTS
-from .brain import news_analyst, portfolio, ranking
+from .brain import ladder, news_analyst, portfolio, ranking
 from .brain.team import Team, new_state as new_team_state
 from .data import kraken, news, revolutx
 from .trading import account as A
@@ -65,6 +65,9 @@ def run():
         if bot.get("source") == "focus":
             scores[b] = focus.run(bot, states[b], ranked, rates, weights[b] > 0, now)
     markets = ranking.market_map(ranked)
+    # 4c) Inkubations-Leiter + Decay-Check: Aufstieg nur durch Trades, Abstieg bei schwachen Ergebnissen
+    for b, bot in BOTS.items():
+        ladder.update(states[b], runner.labels(bot))
 
     # 5) Sammelkonto, Speichern, Übersicht
     for b, amount in P.rebalance(pool, {b: s["real"] for b, s in states.items()}, weights):

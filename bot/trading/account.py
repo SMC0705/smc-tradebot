@@ -59,8 +59,10 @@ def worth_it(bot, pair, sig, price, typ="market"):
 
 
 # --- Kaufen & Verkaufen --------------------------------------------------------------------
-def open_position(acc, bot, pair, sig, px, t, rate, mult, maker=False):
+def open_position(acc, bot, pair, sig, px, t, rate, mult, maker=False, floor=False):
     """Kauft. maker=True: Limit-Order zum Preis px. Sonst Market (mit Kursabschlag).
+    floor=True (Inkubations-Leiter): Wäre die Position mit dem verkleinerten Risiko kleiner als die Mindestgröße,
+    wird die Mindestgröße gekauft – aber nur, wenn deren Risiko das normale (volle) Risiko des Bots nicht übersteigt.
     Gibt None zurück, wenn gekauft wurde – sonst den Grund, warum nicht."""
     v = V.venue(bot, pair)
     f_maker, f_taker, slip = v["maker"], v["taker"], v["slip"]
@@ -76,6 +78,12 @@ def open_position(acc, bot, pair, sig, px, t, rate, mult, maker=False):
     max_notional = min(eq * bot["frac"] * min(mult, 1.0), acc["cash"] / (1 + fee))
     qty = min(qty, max_notional / (fill * rate))
     cost = qty * fill * rate * (1 + fee)
+    if floor and 0 < cost < S.MIN_ORDER_EUR:
+        q_min = S.MIN_ORDER_EUR * 1.001 / (fill * rate * (1 + fee))
+        risk_min = q_min * (fill - sig["stop"]) * rate + q_min * fill * rate * fee
+        if (risk_min <= eq * bot["risk"] and q_min * fill * rate <= eq * bot["frac"]
+                and q_min * fill * rate * (1 + fee) <= acc["cash"]):
+            qty, cost = q_min, q_min * fill * rate * (1 + fee)
     if qty <= 0 or cost < S.MIN_ORDER_EUR:
         if acc["cash"] < S.MIN_ORDER_EUR * (1 + fee):
             return "kein freies Geld"
@@ -99,12 +107,13 @@ def close_position(acc, bot, pair, px, t, rate, result, maker=False):
     """Verkauft. maker=True: Limit-Verkauf (Ziel), sonst Market."""
     p = acc["positions"].pop(pair)
     acc.setdefault("cool", {})[pair] = t  # Abkühlphase: kein sofortiger Wiedereinstieg
+    acc["n_closed"] = acc.get("n_closed", 0) + 1   # laufende Nummer (Inkubations-Leiter zählt Trades, nicht Zeit)
     f_maker, f_taker = (p["fee_m"], p["fee_t"]) if "fee_t" in p else fees(bot, pair)
     proceeds = p["qty"] * px * rate * (1 - (f_maker if maker else f_taker))
     acc["cash"] += proceeds
     pnl = proceeds - p["cost"]
     if acc.get("lean"):  # Schatten-Konten speichern nur das Nötigste (kleine Dateien)
-        rec = {"pair": pair, "r": round(pnl / max(p["risk_eur"], 1e-9), 3), "closed_t": t}
+        rec = {"pair": pair, "r": round(pnl / max(p["risk_eur"], 1e-9), 3), "closed_t": t, "seq": acc["n_closed"]}
         if p.get("pattern"):
             rec["pattern"] = p["pattern"]
         acc["trades"] = (acc["trades"] + [rec])[-300 if acc.get("muster") else -150:]
@@ -114,6 +123,7 @@ def close_position(acc, bot, pair, px, t, rate, result, maker=False):
         "pnl_pct": round(pnl / p["cost"] * 100, 2), "r": round(pnl / max(p["risk_eur"], 1e-9), 3),
         "opened_t": p["opened_t"], "closed_t": t, "result": result, "reason": p["reason"],
         "variant": p["variant"], "pattern": p.get("pattern"), "venue": p.get("venue"), "votes": p.get("votes"),
+        "seq": acc["n_closed"],
     })
     acc["trades"] = acc["trades"][-400:]
 
@@ -192,6 +202,8 @@ def _own_block(acc, bot, pair, t, ctx):
     """Eigene Regeln des Bots vor einer Order: Text = Grund, None = alles in Ordnung."""
     if not ctx["can_open"]:
         return "Bot ist ausgeschaltet (0 %)"
+    if ctx.get("block"):
+        return ctx["block"]
     if ctx["mult"] <= 0:
         return "Wert pausiert (Lernen)"
     if acc["halted"]:
@@ -262,7 +274,8 @@ def _fill(acc, bot, pair, k, rate, ctx, final):
         del acc["pending"][pair]
         _count(stats, "unfilled", o["until"], pair, "Limit-Kauf nicht gefüllt – der Kurs kam nicht zurück")
         return
-    stop_why = ("Bot ist ausgeschaltet (0 %)" if not ctx["can_open"] else "Not-Aus aktiv" if acc["halted"]
+    stop_why = ("Bot ist ausgeschaltet (0 %)" if not ctx["can_open"] else ctx["block"] if ctx.get("block")
+                else "Not-Aus aktiv" if acc["halted"]
                 else "keine freie Position mehr" if pair in acc["positions"] or len(acc["positions"]) >= bot["max_pos"]
                 else None)
     if stop_why:
@@ -277,12 +290,13 @@ def _fill(acc, bot, pair, k, rate, ctx, final):
             del acc["pending"][pair]
             _count(stats, "team", k["t"], pair, f"Team sagt nein – {getattr(gate, 'reason', None) or 'Team-Regel'}")
             return
+    floor = ctx.get("floor", False)
     if o["type"] == "market":
         del acc["pending"][pair]
-        why = open_position(acc, bot, pair, o["sig"], k["o"], k["t"], rate, m)
+        why = open_position(acc, bot, pair, o["sig"], k["o"], k["t"], rate, m, floor=floor)
     elif k["l"] < o["price"]:
         del acc["pending"][pair]
-        why = open_position(acc, bot, pair, o["sig"], o["price"], k["t"], rate, m, maker=True)
+        why = open_position(acc, bot, pair, o["sig"], o["price"], k["t"], rate, m, maker=True, floor=floor)
     else:
         if final and k["t"] + tf >= o["until"]:
             del acc["pending"][pair]
@@ -296,12 +310,14 @@ def _fill(acc, bot, pair, k, rate, ctx, final):
 
 
 def process(acc, bot, pair, closed, rate, params, variant, mult=1.0, can_open=True, start_from=None, gate=None,
-            fn=None, tag_patterns=False, live=None, stats=None, collect=None):
+            fn=None, tag_patterns=False, live=None, stats=None, collect=None, floor=False, block=None):
     """Verarbeitet alle neuen abgeschlossenen Kerzen eines Paares für ein Konto, danach die laufende Kerze.
     gate(pair, signal, t) -> Faktor fürs Risiko (0 = Team blockiert); nur fürs echte Konto.
     fn = eigene Signal-Funktion (sonst die Strategie des Bots). tag_patterns = Muster-Hinweise an Signale hängen.
     live = laufende Kerze (Orders werden sofort geprüft). stats = Zähler fürs Prüfprotokoll.
-    collect = Liste, in die gültige Signale (nach dem Gebühren-Filter) als Kandidaten für den Fokus-Bot kommen."""
+    collect = Liste, in die gültige Signale (nach dem Gebühren-Filter) als Kandidaten für den Fokus-Bot kommen.
+    floor = Mindestgröße kaufen, wenn das verkleinerte Leiter-Risiko darunter läge (siehe open_position).
+    block = Grund, warum gerade nichts Neues gekauft wird (z. B. Ersatzbank) – Signale werden trotzdem gezählt."""
     fn = fn or SIGNALS[bot["strategy"]]
     last = acc["last_t"].get(pair)
     if last is None:
@@ -310,7 +326,8 @@ def process(acc, bot, pair, closed, rate, params, variant, mult=1.0, can_open=Tr
             acc["marks"][pair] = closed[-1]["c"] * rate
             return
         last = closed[max(start_from, 0)]["t"] - 1
-    ctx = {"mult": mult, "can_open": can_open, "gate": gate, "stats": stats, "collect": collect}
+    ctx = {"mult": mult, "can_open": can_open, "gate": gate, "stats": stats, "collect": collect, "floor": floor,
+           "block": block}
     for i, k in enumerate(closed):
         if k["t"] <= last:
             continue

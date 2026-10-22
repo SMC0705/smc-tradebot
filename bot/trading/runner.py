@@ -6,6 +6,7 @@ import json
 import time
 
 from .. import settings as S
+from ..brain import ladder
 from ..brain import learning as L
 from ..data import kraken
 from ..markets import display
@@ -40,12 +41,17 @@ def prepare(st, bot):
     for pair, o in list(pend.items()):
         if "sig" not in o:   # Signal aus der Zeit vor v4.3 -> Kauf zum Marktpreis, Team entscheidet beim Kauf
             pend[pair] = {"sig": o, "type": "market", "price": None, "from": 0, "until": 2 ** 62, "m": None}
+    ladder.state(st)   # Inkubations-Leiter (neue Bots und der erste Lauf von v4.6 starten auf Probe)
     if st.get("vhash") != _vhash(bot):
         st.update(shadows=_shadows(bot), muster=_muster(), active=0, pair_mult={}, pair_pause={}, pair_since={},
                   pattern_status={}, vhash=_vhash(bot), live_since=int(time.time()))
         L.log(st, "Strategie wurde verbessert – Lernen startet neu (zuerst aus der Vergangenheit)")
     st.setdefault("muster", _muster())
     return st
+
+
+def labels(bot):
+    return [LABELS[i] for i in range(len(bot["variants"]))]
 
 
 def scores_only(bot, st):
@@ -60,6 +66,7 @@ def run(bid, bot, st, rates, enabled, errors, unavailable, gate=None, candidates
         pumpfun.run(bot, st, rates, enabled, errors, gate)
         return L.choose_variant(st, labels)
     main_fn = SIGNALS[bot["strategy"]]
+    lf, block = ladder.factor(st), ladder.block_reason(st)   # Inkubations-Leiter: ¼, ½ oder volles Risiko
     learned = L.learned_patterns(st)
     pattern_p = {"allowed": learned, "risk_mult": S.LEARN_RULES["pattern_risk"]}
 
@@ -91,12 +98,14 @@ def run(bid, bot, st, rates, enabled, errors, unavailable, gate=None, candidates
         A.process(st["muster"], dict(bot, max_pos=99, frac=0.05), pair, closed, rate, {"allowed": None}, -1,
                   start_from=max(len(closed) - S.WARMUP_CANDLES, 0), fn=patterns.signal, live=live)
         st["muster"]["marks"][pair] = live["c"] * rate
-        # 3) echtes Konto: aktive Variante + gelernte Muster, Risiko je Wert (Lernen) und Team-Entscheidung
-        mult = L.pair_multiplier(st, pair, st["real"]["trades"])
+        # 3) echtes Konto: aktive Variante + gelernte Muster, Risiko je Wert (Lernen), Stufe der Leiter
+        #    und Team-Entscheidung
+        mult = L.pair_multiplier(st, pair, st["real"]["trades"]) * lf
         act = st["active"]
         found = []
         A.process(st["real"], bot, pair, closed, rate, bot["variants"][act], act, mult=mult,
-                  can_open=enabled, gate=gate, fn=combined, tag_patterns=True, live=live, stats=stats, collect=found)
+                  can_open=enabled, gate=gate, fn=combined, tag_patterns=True, live=live, stats=stats, collect=found,
+                  floor=lf < 1, block=block)
         st["real"]["marks"][pair] = live["c"] * rate
         if candidates is not None:   # nur Signale der letzten abgeschlossenen Kerze sind frisch
             fresh_t = closed[-1]["t"] + bot["tf"] * 60

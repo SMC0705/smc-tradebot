@@ -4,6 +4,7 @@ import time
 
 from . import settings as S
 from .bots import BOTS
+from .brain import ladder
 from .brain import learning as L
 from .strategies.patterns import LABELS as PATTERN_LABELS
 from .markets import display
@@ -90,6 +91,7 @@ def bot_status(bot, st, weight, team, scores, unavailable, now=None):
         "scan": st.get("last_scan"),
         "board": st.get("board") if bot.get("source") == "focus" else None,
         "checks": checks(st, now), "exec": execution(bot),
+        "ladder": ladder.status(st, [LABELS[i] for i in range(len(bot["variants"]))]),
         "orders": [{"pair": disp(pp), "type": o["type"], "price": o.get("price"), "until": o.get("until"),
                     "reason": o["sig"].get("reason")} for pp, o in a.get("pending", {}).items() if "sig" in o],
         "learning": {
@@ -141,7 +143,7 @@ def council_status(tstate, states):
 
 def build(now, errors, pool, total, weights, suggestion, teams, bots, news, markets=None, council=None):
     return {
-        "mode": S.MODE, "updated_at": now, "currency": "EUR", "errors": errors,
+        "mode": S.MODE, "version": S.RELEASE, "updated_at": now, "currency": "EUR", "errors": errors,
         "pool": {"equity": round(total, 2), "start": pool["start"],
                  "pnl_pct": round((total / pool["start"] - 1) * 100, 2),
                  "unallocated": round(pool["unallocated"], 2), "weights": weights,

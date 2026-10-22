@@ -15,6 +15,7 @@ denselben Coin für 12 Std., Gebühren ca. 1 % je Richtung (Bonding-Curve bzw. P
 import time
 import urllib.error
 
+from ..brain import ladder
 from ..data import dex as D
 from ..strategies.indicators import ema
 from . import account as E
@@ -106,6 +107,7 @@ def run(bot, st, rates, enabled, errors, gate=None):
     for k in [k for k, t in cool.items() if now - t > COOLDOWN]:
         del cool[k]
     budget = prof["calls"]
+    lf = ladder.factor(st)   # Inkubations-Leiter: echtes Konto mit ¼, ½ oder vollem Risiko (0 = Ersatzbank)
 
     # 1) offene Positionen mit 5-Minuten-Kerzen nachspielen (Stop, Ziel, Trailing, Zeitablauf)
     held = sorted({pool for a in accounts for pool in a["positions"]},
@@ -164,13 +166,13 @@ def run(bot, st, rates, enabled, errors, gate=None):
             sig = {"stop": price * (1 - v["stop"]), "target": price * (1 + v["target"]), "trail_n": v["trail"],
                    "max_hold": prof["max_hold"], "variant": var,
                    "reason": f"Ausbruch, {p['ch_h1']:+.0f} % in 1 Std., {stage}"}
-            if is_real and not enabled:
+            if is_real and (not enabled or lf <= 0):
                 continue
             if not a["halted"] and len(a["positions"]) < bot["max_pos"]:
-                m = (gate(p["pool"], sig, now) if gate else 1.0) if is_real else 1.0
+                m = (gate(p["pool"], sig, now) * lf if gate else lf) if is_real else 1.0
                 if m <= 0:
                     continue
-                E.open_position(a, bot, p["pool"], sig, price, now, usd, m)
+                E.open_position(a, bot, p["pool"], sig, price, now, usd, m, floor=is_real and lf < 1)
                 if p["pool"] in a["positions"]:
                     a["last_t"][p["pool"]] = live["t"]
                     a["marks"][p["pool"]] = price * usd

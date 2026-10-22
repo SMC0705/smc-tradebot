@@ -33,6 +33,7 @@ smc-tradebot/
 │  │  └─ pool.py             Sammelkonto: Aufteilung auf die Bots, Umbuchungen
 │  └─ brain/                 4) ENTSCHEIDEN – über den einzelnen Bots
 │     ├─ learning.py         Lernen: Varianten, Muster (gelernt/verworfen), Risiko je Wert (Pause max. 24 Std.)
+│     ├─ ladder.py           Inkubations-Leiter (Ersatzbank → ¼ → ½ → volles Risiko) + Decay-Check alle 15 Trades
 │     ├─ analyst.py          Marktlage (Aufwärts/Seitwärts/Abwärts) + größerer Trend
 │     ├─ news_analyst.py     Nachrichtenlage, Termin-Sperren, Coin-Warnungen, Krisen-Themen
 │     ├─ risk.py             Risiko-Manager: Team-Pausen, Kollegen-Warnung, Klumpenrisiko
@@ -46,7 +47,7 @@ smc-tradebot/
 │  ├─ <bot>.json             je Bot: echtes Konto, Schatten-Varianten, Lern-Protokoll
 │  ├─ pool.json · team.json · news.json
 ├─ docs/                     die Handy-App (GitHub Pages): index.html, visuals.js (Live-Ansichten), data/status.json
-├─ tests/                    Tests ohne Internet: python -m tests.simulate 44 · python -m tests.test_orders
+├─ tests/                    Tests ohne Internet: python -m tests.simulate 44 · python -m tests.test_orders · python -m tests.test_ladder
 └─ .github/workflows/bot.yml Zeitplan: alle 30 Minuten python -m bot.main
 ```
 
@@ -64,15 +65,36 @@ smc-tradebot/
    6. jedes gültige, frische Signal (nach dem Gebühren-Filter) wird außerdem Kandidat für den Fokus-Bot
 4b. **Fokus-Bot:** alle Kandidaten bewerten (`brain/ranking.py`), nur der beste wird gehandelt (`trading/focus.py`);
     Markt-Karte aller Märkte für die Kugel in der App.
+4c. **Inkubations-Leiter + Decay-Check** (`brain/ladder.py`): je Bot Aufstieg prüfen (nur durch Trades, nie durch Zeit)
+    und nach je 15 neuen Trades neu bewerten – wer verliert, steigt ab, die beste Schatten-Variante übernimmt,
+    ohne Variante im Plus geht es auf die Ersatzbank.
 5. **Abschluss:** Prüfprotokoll je Bot, Sammelkonto umverteilen, alles speichern, `docs/data/status.json` schreiben.
 
 Zeitlimit: GitHub bricht einen Lauf nach 15 Min. ab. Dauert ein Lauf länger als `settings.RUN_BUDGET_MIN` (11 Min.),
 werden die übrigen Bots übersprungen und holen im nächsten Lauf alles nach – der Zustand wird immer gespeichert.
 
+## Inkubations-Leiter und Decay-Check (seit v4.6, Idee aus Algory)
+Das echte Konto jedes Bots handelt mit einem Teil seines normalen Risikos – je nachdem, wie gut er sich bisher bewährt hat:
+
+| Stufe | Risiko | Aufstieg | Abstieg |
+|---|---|---|---|
+| Ersatzbank | 0 (nur Schatten-Trades) | eine Schatten-Variante hat seit dem Gang auf die Bank ≥ 15 Trades mit Ø R > 0 → sie wird aktiv, Bot startet auf Probe | – |
+| Probe | ¼ | ≥ 10 Trades auf dieser Stufe mit Ø R > 0 | Decay-Check verloren: bessere Variante übernimmt (bleibt auf Probe), sonst Ersatzbank |
+| Bewährung | ½ | ≥ 20 Trades auf dieser Stufe mit Ø R > 0 und die letzten 30 Trades zusammen im Plus | Decay-Check verloren oder Note −5 → Probe |
+| Volles Risiko | 1 | – | Decay-Check verloren oder Note −5 → Bewährung |
+
+Decay-Check: nach je 15 neuen abgeschlossenen Trades bekommt der Bot eine Note von 0 bis 100 (50 = kein Vorteil nach
+Gebühren). Ø R < 0 → „Ersatz fällig“ (eine Stufe runter, die beste Schatten-Variante übernimmt, wenn sie im Plus ist);
+Note mindestens 5 Punkte unter der letzten → „schwächelt“ (eine Stufe runter); sonst „gesund“. Alles steht im
+Lern-Protokoll des Bots. Gezählt wird über die laufende Nummer jedes Trades (`seq`), nicht über die Zeit.
+Liegt eine Position mit ¼ Risiko unter der Mindestgröße (10 €), wird die Mindestgröße gekauft – aber nur, wenn deren
+Risiko das normale volle Risiko des Bots nicht übersteigt. Regeln: `settings.LADDER_RULES`.
+
 ## Weg eines Trades
 `Strategie.signal()` bzw. gelerntes Muster (bei Kerzenschluss) → Gebühren-Filter `account.worth_it()`
-(Stop mind. 1,5× so weit weg wie Kauf + Verkauf kosten, je Markt aus `settings.FEES`) → eigene Regeln (Pause, Abkühlung,
-max. Positionen) → `team.gate()` gibt einen Risiko-Faktor (0 = nicht kaufen, sonst 0,25…1,5) → **Kauf-Order** in `pending`:
+(Stop mind. 1,5× so weit weg wie Kauf + Verkauf kosten, je Markt aus `settings.FEES`) → eigene Regeln (Ersatzbank, Pause, Abkühlung,
+max. Positionen) → Stufe der Leiter (¼ / ½ / 1) → `team.gate()` gibt einen Risiko-Faktor (0 = nicht kaufen, sonst 0,25…1,5)
+→ **Kauf-Order** in `pending`:
 Limit (10 % der Stop-Distanz unter dem Signalkurs, gilt 2 Kerzen, Maker-Gebühr) oder Market (nächster Eröffnungskurs,
 Taker-Gebühr + Kursabschlag) → `account.open_position()` (Größe nach Risiko) → jede weitere Kerze `account.manage()`:
 Stop (Market), Ziel (Limit-Verkauf), Zeitablauf, Tagesende (Aktien-Daytrading: US-Börsenschluss), Signal-Ausstieg,
@@ -102,7 +124,9 @@ Gebühren beim Kauf, der Verkauf rechnet mit denselben.
 - **Gebühren:** `settings.FEES`, `settings.VENUES`, `settings.KRAKEN_TIER`. **Börse für Krypto:** `settings.CRYPTO_VENUE`.
   **Kaufart:** `entry` in `bots.py`.
 - **Fokus-Bot:** Gewichte und Tageslimit in `settings.FOCUS_RULES`, Mindestnoten als Varianten in `bots.py`.
-- **Live-Ansichten der App:** `docs/visuals.js` (eine Funktion je Ansicht: Zentrale, Orbit, Rat, Kugel).
+- **Leiter/Decay-Check:** Schwellen in `settings.LADDER_RULES`, Logik in `bot/brain/ladder.py`.
+- **Live-Ansichten der App:** `docs/visuals.js` (eine Funktion je Ansicht: Raumschiff, Orbit, Rat, Kugel);
+  Farben und Schrift der ganzen App stehen oben in `docs/index.html` (`:root`).
 - **Regeln/Grenzwerte ändern:** nur in `bot/settings.py`.
 - **Varianten ändern:** Das Lernen dieses Bots startet automatisch neu. Das echte Konto bleibt.
 - **pump.fun-Filter:** `PROFILES` in `bot/trading/pumpfun.py` ("safe" = vorsichtig, "all" = ganzer Markt); ein Bot wählt sein
@@ -114,4 +138,5 @@ Gebühren beim Kauf, der Verkauf rechnet mit denselben.
 2. `data/` holt nur Daten, `strategies/` liefert nur Signale, `trading/` rechnet Geld, `brain/` entscheidet.
 3. Einstellungen stehen nur in `settings.py`, `bots.py`, `markets.py` und `config/`, nicht verstreut im Code.
 4. Jede Datei beginnt mit einer kurzen Beschreibung, was sie tut.
-5. Vor jedem Upload: `python -m tests.simulate 44` und `python -m tests.test_orders` müssen ohne Fehler durchlaufen.
+5. Vor jedem Upload: `python -m tests.simulate 44`, `python -m tests.test_orders` und `python -m tests.test_ladder`
+   müssen ohne Fehler durchlaufen.
